@@ -9,7 +9,8 @@
 //!
 //! Numerical operators are supported. All numerical values are treated as
 //! `i64` or `f64`. Type casting is not supported. `i64` are converted to
-//! `f64` when used in conjunction with a `f64`.
+//! `f64` when used in conjunction with a `f64`. Right shifts are always
+//! arithmetic shifts.
 //!
 //! The `sizeof` operator is not supported.
 //!
@@ -20,6 +21,7 @@
 
 use std::collections::HashMap;
 use std::ops::{AddAssign,BitAndAssign,BitOrAssign,BitXorAssign,DivAssign,MulAssign,RemAssign,ShlAssign,ShrAssign,SubAssign};
+use std::num::Wrapping;
 
 use literal::{self,CChar};
 use token::{Token,Kind as TokenKind};
@@ -38,7 +40,7 @@ pub type CResult<'a,R:'a> = IResult<&'a [Token],R,::Error>;
 /// The result of parsing a literal or evaluating an expression.
 #[derive(Debug,Clone,PartialEq)]
 pub enum EvalResult {
-	Int(i64),
+	Int(Wrapping<i64>),
 	Float(f64),
 	Char(CChar),
 	Str(Vec<u8>),
@@ -59,7 +61,7 @@ macro_rules! result_opt (
 );
 
 impl EvalResult {
-	result_opt!(fn as_int: Int -> i64);
+	result_opt!(fn as_int: Int -> Wrapping<i64>);
 	result_opt!(fn as_float: Float -> f64);
 	result_opt!(fn as_char: Char -> CChar);
 	result_opt!(fn as_str: Str -> Vec<u8>);
@@ -136,8 +138,8 @@ impl<'a> AddAssign<&'a EvalResult> for EvalResult {
 		use self::EvalResult::*;
 		*self=match (&*self,rhs) {
 			(&Int(a),  &Int(b))   => Int(a+b),
-			(&Float(a),&Int(b))   => Float(a+(b as f64)),
-			(&Int(a),  &Float(b)) => Float(a as f64+b),
+			(&Float(a),&Int(b))   => Float(a+(b.0 as f64)),
+			(&Int(a),  &Float(b)) => Float(a.0 as f64+b),
 			(&Float(a),&Float(b)) => Float(a+b),
 			_ => Invalid
 		};
@@ -174,8 +176,8 @@ impl<'a> DivAssign<&'a EvalResult> for EvalResult {
 		use self::EvalResult::*;
 		*self=match (&*self,rhs) {
 			(&Int(a),  &Int(b))   => Int(a/b),
-			(&Float(a),&Int(b))   => Float(a/(b as f64)),
-			(&Int(a),  &Float(b)) => Float(a as f64/b),
+			(&Float(a),&Int(b))   => Float(a/(b.0 as f64)),
+			(&Int(a),  &Float(b)) => Float(a.0 as f64/b),
 			(&Float(a),&Float(b)) => Float(a/b),
 			_ => Invalid
 		};
@@ -186,8 +188,8 @@ impl<'a> MulAssign<&'a EvalResult> for EvalResult {
 		use self::EvalResult::*;
 		*self=match (&*self,rhs) {
 			(&Int(a),  &Int(b))   => Int(a*b),
-			(&Float(a),&Int(b))   => Float(a*(b as f64)),
-			(&Int(a),  &Float(b)) => Float(a as f64*b),
+			(&Float(a),&Int(b))   => Float(a*(b.0 as f64)),
+			(&Int(a),  &Float(b)) => Float(a.0 as f64*b),
 			(&Float(a),&Float(b)) => Float(a*b),
 			_ => Invalid
 		};
@@ -198,8 +200,8 @@ impl<'a> RemAssign<&'a EvalResult> for EvalResult {
 		use self::EvalResult::*;
 		*self=match (&*self,rhs) {
 			(&Int(a),  &Int(b))   => Int(a%b),
-			(&Float(a),&Int(b))   => Float(a%(b as f64)),
-			(&Int(a),  &Float(b)) => Float(a as f64%b),
+			(&Float(a),&Int(b))   => Float(a%(b.0 as f64)),
+			(&Int(a),  &Float(b)) => Float(a.0 as f64%b),
 			(&Float(a),&Float(b)) => Float(a%b),
 			_ => Invalid
 		};
@@ -209,7 +211,7 @@ impl<'a> ShlAssign<&'a EvalResult> for EvalResult {
     fn shl_assign(&mut self, rhs: &'a EvalResult) {
 		use self::EvalResult::*;
 		*self=match (&*self,rhs) {
-			(&Int(a),&Int(b)) => Int(a<<b),
+			(&Int(a),&Int(b)) => Int(a<<(b.0 as usize)),
 			_ => Invalid
 		};
 	}
@@ -218,7 +220,7 @@ impl<'a> ShrAssign<&'a EvalResult> for EvalResult {
     fn shr_assign(&mut self, rhs: &'a EvalResult) {
 		use self::EvalResult::*;
 		*self=match (&*self,rhs) {
-			(&Int(a),&Int(b)) => Int(a>>b),
+			(&Int(a),&Int(b)) => Int(a>>(b.0 as usize)),
 			_ => Invalid
 		};
 	}
@@ -228,8 +230,8 @@ impl<'a> SubAssign<&'a EvalResult> for EvalResult {
 		use self::EvalResult::*;
 		*self=match (&*self,rhs) {
 			(&Int(a),  &Int(b))   => Int(a-b),
-			(&Float(a),&Int(b))   => Float(a-(b as f64)),
-			(&Int(a),  &Float(b)) => Float(a as f64-b),
+			(&Float(a),&Int(b))   => Float(a-(b.0 as f64)),
+			(&Int(a),  &Float(b)) => Float(a.0 as f64-b),
 			(&Float(a),&Float(b)) => Float(a-b),
 			_ => Invalid
 		};

@@ -17,10 +17,8 @@ use cexpr::token::Token;
 use cexpr::expr::{IdentifierParser,EvalResult};
 use cexpr::literal::CChar;
 
-const TEST_HEADER: &'static str="tests/test.h";
-
 // main testing routine
-fn clang_test(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8>,EvalResult>) -> bool {
+fn test_definition(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8>,EvalResult>) -> bool {
 	use cexpr::expr::EvalResult::*;
 	
 	let display_name=String::from_utf8_lossy(&ident).into_owned();
@@ -34,7 +32,7 @@ fn clang_test(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8>,Eva
 		if expected==b"Str" {
 			Some(Str(value.to_owned()))
 		} else if expected==b"Int" {
-			str::from_utf8(value).ok().map(|s|s.replace("n","-")).and_then(|v|i64::from_str(&v).ok()).map(Int)
+			str::from_utf8(value).ok().map(|s|s.replace("n","-")).and_then(|v|i64::from_str(&v).ok()).map(::std::num::Wrapping).map(Int)
 		} else if expected==b"Float" {
 			str::from_utf8(value).ok().map(|s|s.replace("n","-").replace("p",".")).and_then(|v|f64::from_str(&v).ok()).map(Float)
 		} else if expected==b"CharRaw" {
@@ -110,23 +108,22 @@ unsafe fn location_in_scope(r: CXSourceRange) -> bool {
 		&& file.0!=ptr::null_mut()
 }
 
-#[test]
-fn clang() {
+fn test_file(file: &str) -> bool {
 	let mut idents=HashMap::new();
 	let mut all_succeeded=true;
 	unsafe {
 		let tu={
 			let index=clang_createIndex(true as _, false as _);
-			let file=ffi::CString::new(TEST_HEADER).unwrap();
+			let cfile=ffi::CString::new(file).unwrap();
 			let mut tu=mem::uninitialized();
-			assert_eq!(clang_parseTranslationUnit2(
+			assert!(clang_parseTranslationUnit2(
 				index,
-				file.as_ptr(),
+				cfile.as_ptr(),
 				[b"-std=c11\0".as_ptr() as *const ::std::os::raw::c_char].as_ptr(),1,
 				ptr::null_mut(),0,
 				CXTranslationUnit_DetailedPreprocessingRecord,
 				&mut tu
-			),CXErrorCode::Success);
+			)==CXErrorCode::Success,"Failure reading test case {}",file);
 			tu
 		};
 		visit_children(clang_getTranslationUnitCursor(tu),|cur,_parent| {
@@ -147,12 +144,27 @@ fn clang() {
 						}
 					).collect();
 					clang_disposeTokens(tu,token_ptr,num);
-					all_succeeded&=clang_test(clang_str_to_vec(clang_getCursorSpelling(cur)),&tokens,&mut idents);
+					all_succeeded&=test_definition(clang_str_to_vec(clang_getCursorSpelling(cur)),&tokens,&mut idents);
 				}
 			}
 			CXChildVisitResult::Continue
 		});
 		clang_disposeTranslationUnit(tu);
 	};
-	if !all_succeeded { panic!("One or more tests failed") }
+	all_succeeded
 }
+
+macro_rules! test_file {
+	($f:ident) => {
+		#[test] fn $f() {
+			assert!(test_file(concat!("tests/input/",stringify!($f),".h")),"test_file")
+		}
+	}
+}
+
+test_file!(floats);
+test_file!(chars);
+test_file!(strings);
+test_file!(int_signed);
+test_file!(int_unsigned);
+test_file!(fail);

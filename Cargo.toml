@@ -1,6 +1,6 @@
 [package]
 name = "cexpr"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Jethro Beekman <jethro@jbeekman.nl>"]
 license = "Apache-2.0/MIT"
 description = "A C expression parser and evaluator"
@@ -10,8 +10,6 @@ keywords = ["C","expression","parser"]
 
 [dependencies]
 nom = { version = "^1", features = ["regexp","regexp_macros"] }
-regex = "^0.1.56" # version from nom
-lazy_static = "^0.1.15" # version from nom
 
 [dev-dependencies]
 clang-sys = "0.7.0"

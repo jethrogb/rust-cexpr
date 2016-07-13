@@ -6,11 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-extern crate regex;
 #[macro_use]
 extern crate nom as nom_crate;
-#[macro_use]
-extern crate lazy_static;
 
 pub mod nom {
     //! nom's result types, re-exported.
