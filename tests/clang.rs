@@ -122,7 +122,7 @@ fn clang() {
 			assert_eq!(clang_parseTranslationUnit2(
 				index,
 				file.as_ptr(),
-				ptr::null(),0,
+				[b"-std=c11\0".as_ptr() as *const ::std::os::raw::c_char].as_ptr(),1,
 				ptr::null_mut(),0,
 				CXTranslationUnit_DetailedPreprocessingRecord,
 				&mut tu
