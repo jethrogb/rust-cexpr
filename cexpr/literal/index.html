@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `literal` mod in crate `cexpr`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, literal">
+
+    <title>cexpr::literal - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='../index.html'>cexpr</a></p><script>window.sidebarCurrent = {name: 'literal', ty: 'mod', relpath: '../'};</script><script defer src="../sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content mod">
+<h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>cexpr</a>::<wbr><a class='mod' href=''>literal</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-9' class='srclink' href='../../src/cexpr/src/literal.rs.html#8-191' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>Parsing C literals from byte slices.</p>
+
+<p>This will parse a representation of a C literal into a Rust type.</p>
+
+<h1 id='characters' class='section-header'><a href='#characters'>characters</a></h1>
+<p>Character literals are stored into the <code>CChar</code> type, which can hold values
+that are not valid Unicode code points. ASCII characters are represented as
+<code>char</code>, literal bytes with the high byte set are converted into the raw
+representation. Escape sequences are supported. If hex and octal escapes
+map to an ASCII character, that is used, otherwise, the raw encoding is
+used, including for values over 255. Unicode escapes are checked for
+validity and mapped to <code>char</code>. Character sequences are not supported. Width
+prefixes are ignored.</p>
+
+<h1 id='strings' class='section-header'><a href='#strings'>strings</a></h1>
+<p>Strings are interpreted as byte vectors. Escape sequences are supported. If
+hex and octal escapes map onto multi-byte characters, they are truncated to
+one 8-bit character. Unicode escapes are converted into their UTF-8
+encoding. Width prefixes are ignored.</p>
+
+<h1 id='integers' class='section-header'><a href='#integers'>integers</a></h1>
+<p>Integers are read into <code>i64</code>. Binary, octal, decimal and hexadecimal are
+all supported. If the literal value is between <code>i64::MAX</code> and <code>u64::MAX</code>,
+it is bit-cast to <code>i64</code>. Values over <code>u64::MAX</code> cannot be parsed. Width and
+sign suffixes are ignored. Sign prefixes are not supported.</p>
+
+<h1 id='real-numbers' class='section-header'><a href='#real-numbers'>real numbers</a></h1>
+<p>Reals are read into <code>f64</code>. Width suffixes are ignored. Sign prefixes are
+not supported in the significand.</p>
+</div><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class='enum' href='enum.CChar.html'
+                                  title='cexpr::literal::CChar'>CChar</a></td>
+                           <td class='docblock short'>
+                                <p>Representation of a C character</p>
+                           </td>
+                       </tr></table><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class='fn' href='fn.parse.html'
+                                  title='cexpr::literal::parse'>parse</a></td>
+                           <td class='docblock short'>
+                                <p>Parse a C literal.</p>
+                           </td>
+                       </tr></table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "cexpr";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script defer src="../../search-index.js"></script>
+</body>
+</html>
