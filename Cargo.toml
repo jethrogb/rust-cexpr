@@ -1,6 +1,6 @@
 [package]
 name = "cexpr"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Jethro Beekman <jethro@jbeekman.nl>"]
 license = "Apache-2.0/MIT"
 description = "A C expression parser and evaluator"
@@ -9,7 +9,7 @@ repository = "https://github.com/jethrogb/rust-cexpr"
 keywords = ["C","expression","parser"]
 
 [dependencies]
-nom = { version = "^1", features = ["regexp","regexp_macros"] }
+nom = "^1"
 
 [dev-dependencies]
 clang-sys = "0.7.0"
