@@ -243,7 +243,7 @@ fn unary_op(input: (&[u8],EvalResult)) -> Option<EvalResult> {
 	assert_eq!(input.0.len(),1);
 	match (input.0[0],input.1) {
 		(b'+',i) => Some(i),
-		(b'-',Int(i)) => Some(Int(Wrapping(i.0.wrapping_neg()))),
+		(b'-',Int(i)) => Some(Int(Wrapping(i.0.wrapping_neg()))), // impl Neg for Wrapping not until rust 1.10...
 		(b'-',Float(i)) => Some(Float(-i)),
 		(b'-',_) => unreachable!("non-numeric unary op"),
 		(b'~',Int(i)) => Some(Int(!i)),
