@@ -20,7 +20,7 @@ use cexpr::literal::CChar;
 // main testing routine
 fn test_definition(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8>,EvalResult>) -> bool {
 	use cexpr::expr::EvalResult::*;
-	
+
 	let display_name=String::from_utf8_lossy(&ident).into_owned();
 
 	let test={
@@ -28,7 +28,7 @@ fn test_definition(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8
 		let pos=ident.iter().position(|c|*c==b'_').expect(&format!("Invalid definition in testcase: {}",display_name));
 		let expected=&ident[..pos];
 		let value=&ident[(pos+1)..];
-		
+
 		if expected==b"Str" {
 			Some(Str(value.to_owned()))
 		} else if expected==b"Int" {
@@ -74,14 +74,16 @@ unsafe fn clang_str_to_vec(s: CXString) -> Vec<u8> {
 	vec
 }
 
+#[allow(non_upper_case_globals)]
 unsafe fn token_clang_to_cexpr(tu: CXTranslationUnit, orig: &CXToken) -> Token {
 	Token {
 		kind:match clang_getTokenKind(*orig) {
-			CXTokenKind::Comment => cexpr::token::Kind::Comment,
-			CXTokenKind::Identifier => cexpr::token::Kind::Identifier,
-			CXTokenKind::Keyword => cexpr::token::Kind::Keyword,
-			CXTokenKind::Literal => cexpr::token::Kind::Literal,
-			CXTokenKind::Punctuation => cexpr::token::Kind::Punctuation,
+			CXToken_Comment => cexpr::token::Kind::Comment,
+			CXToken_Identifier => cexpr::token::Kind::Identifier,
+			CXToken_Keyword => cexpr::token::Kind::Keyword,
+			CXToken_Literal => cexpr::token::Kind::Literal,
+			CXToken_Punctuation => cexpr::token::Kind::Punctuation,
+			_ => panic!("invalid token kind: {:?}", *orig),
 		},
 		raw:clang_str_to_vec(clang_getTokenSpelling(tu,*orig)).into_boxed_slice()
 	}
@@ -104,7 +106,7 @@ unsafe fn location_in_scope(r: CXSourceRange) -> bool {
 	let mut file=CXFile(ptr::null_mut());
 	clang_getSpellingLocation(start,&mut file,ptr::null_mut(),ptr::null_mut(),ptr::null_mut());
 	clang_Location_isFromMainFile(start)!=0
-		&& clang_Location_isInSystemHeader(start)==0 
+		&& clang_Location_isInSystemHeader(start)==0
 		&& file.0!=ptr::null_mut()
 }
 
@@ -123,13 +125,13 @@ fn test_file(file: &str) -> bool {
 				ptr::null_mut(),0,
 				CXTranslationUnit_DetailedPreprocessingRecord,
 				&mut tu
-			)==CXErrorCode::Success,"Failure reading test case {}",file);
+			)==CXError_Success,"Failure reading test case {}",file);
 			tu
 		};
 		visit_children(clang_getTranslationUnitCursor(tu),|cur,_parent| {
-			if cur.kind==CXCursorKind::MacroDefinition {
+			if cur.kind==CXCursor_MacroDefinition {
 				let mut range=clang_getCursorExtent(cur);
-				if !location_in_scope(range) { return CXChildVisitResult::Continue }
+				if !location_in_scope(range) { return CXChildVisit_Continue }
 				range.end_int_data-=1; // clang bug for macros only
 				let mut token_ptr=ptr::null_mut();
 				let mut num=0;
@@ -137,7 +139,7 @@ fn test_file(file: &str) -> bool {
 				if token_ptr!=ptr::null_mut() {
 					let tokens=slice::from_raw_parts(token_ptr,num as usize);
 					let tokens: Vec<_>=tokens.iter().filter_map(|t|
-						if clang_getTokenKind(*t)!=CXTokenKind::Comment {
+						if clang_getTokenKind(*t)!=CXToken_Comment {
 							Some(token_clang_to_cexpr(tu,t))
 						} else {
 							None
@@ -147,7 +149,7 @@ fn test_file(file: &str) -> bool {
 					all_succeeded&=test_definition(clang_str_to_vec(clang_getCursorSpelling(cur)),&tokens,&mut idents);
 				}
 			}
-			CXChildVisitResult::Continue
+			CXChildVisit_Continue
 		});
 		clang_disposeTranslationUnit(tu);
 	};
