@@ -269,66 +269,109 @@ impl<'a> PRef<'a> {
 	);
 
 	method!(mul_div_rem<PRef<'a>,&[Token],EvalResult,::Error>, mut self,
-		chain!(
-			mut acc: call_m!(self.unary) ~
-			many0!(alt!(
-				tap!(mul: preceded!(p!("*"), call_m!(self.unary)) => acc *= &mul) |
-				tap!(div: preceded!(p!("/"), call_m!(self.unary)) => acc /= &div) |
-				tap!(rem: preceded!(p!("%"), call_m!(self.unary)) => acc %= &rem)
-			)),
-			|| { return acc }
+		do_parse!(
+			acc: call_m!(self.unary) >>
+			res: fold_many0!(
+				alt!(
+					pair!(p!("*"), call_m!(self.unary)) |
+					pair!(p!("/"), call_m!(self.unary)) |
+					pair!(p!("%"), call_m!(self.unary))
+				),
+				acc,
+				|mut acc, (op, val): (&[u8], EvalResult)| {
+					 match op[0] as char {
+						'*' => acc *= &val,
+						'/' => acc /= &val,
+						'%' => acc %= &val,
+						_   => {}, // will not happen anyway
+					};
+					acc
+				}
+			) >> (res)
 		)
 	);
 
 	method!(add_sub<PRef<'a>,&[Token],EvalResult,::Error>, mut self,
-		chain!(
-			mut acc: call_m!(self.mul_div_rem) ~
-			many0!(alt!(
-				tap!(add: preceded!(p!("+"), call_m!(self.mul_div_rem)) => acc += &add) |
-				tap!(sub: preceded!(p!("-"), call_m!(self.mul_div_rem)) => acc -= &sub)
-			)),
-			|| { return acc }
+		do_parse!(
+			acc: call_m!(self.mul_div_rem) >>
+			res: fold_many0!(
+			alt!(
+				pair!(p!("+"), call_m!(self.mul_div_rem)) |
+				pair!(p!("-"), call_m!(self.mul_div_rem))
+			),
+			acc,
+			|mut acc, (op, val): (&[u8], EvalResult)| {
+				match op[0] as char {
+					'+' => acc += &val,
+					'-' => acc -= &val,
+					_   => {},
+				};
+				acc
+			}
+)			 >> (res)
 		)
 	);
 
 	method!(shl_shr<PRef<'a>,&[Token],EvalResult,::Error>, mut self,
-		numeric!(chain!(
-			mut acc: call_m!(self.add_sub) ~
-			many0!(alt!(
-				tap!(shl: preceded!(p!("<<"), call_m!(self.add_sub)) => acc <<= &shl) |
-				tap!(shr: preceded!(p!(">>"), call_m!(self.add_sub)) => acc >>= &shr)
-			)),
-			|| { return acc }
+		numeric!(do_parse!(
+			acc: call_m!(self.add_sub) >>
+			res: fold_many0!(
+				alt!(
+					pair!(p!("<<"), call_m!(self.add_sub)) |
+					pair!(p!(">>"), call_m!(self.add_sub))
+				),
+				acc,
+				|mut acc, (op, val): (&[u8], EvalResult)| {
+					match op {
+						b"<<" => acc <<= &val,
+						b">>" => acc >>= &val,
+						_     => {},
+					};
+					acc
+				}
+			) >> (res)
 		))
 	);
 
 	method!(and<PRef<'a>,&[Token],EvalResult,::Error>, mut self,
-		numeric!(chain!(
-			mut acc: call_m!(self.shl_shr) ~
-			many0!(
-				tap!(and: preceded!(p!("&"), call_m!(self.shl_shr)) => acc &= &and)
-			),
-			|| { return acc }
+		numeric!(do_parse!(
+			acc: call_m!(self.shl_shr) >>
+			res: fold_many0!(
+				preceded!(p!("&"), call_m!(self.shl_shr)),
+				acc,
+				|mut acc, val: EvalResult| {
+					acc &= &val;
+					acc
+				}
+			) >> (res)
 		))
 	);
 
 	method!(xor<PRef<'a>,&[Token],EvalResult,::Error>, mut self,
-		numeric!(chain!(
-			mut acc: call_m!(self.and) ~
-			many0!(
-				tap!(xor: preceded!(p!("^"), call_m!(self.and)) => acc ^= &xor)
-			),
-			|| { return acc }
+		numeric!(do_parse!(
+			acc: call_m!(self.and) >>
+			res: fold_many0!(
+				preceded!(p!("^"), call_m!(self.and)),
+				acc,
+			|	mut acc, val: EvalResult| {
+					acc ^= &val;
+					acc
+				}
+			) >> (res)
 		))
 	);
 
 	method!(or<PRef<'a>,&[Token],EvalResult,::Error>, mut self,
-		numeric!(chain!(
-			mut acc: call_m!(self.xor) ~
-			many0!(
-				tap!(or: preceded!(p!("|"), call_m!(self.xor)) => acc |= &or)
-			),
-			|| { return acc }
+		numeric!(do_parse!(
+			acc: call_m!(self.xor) >>
+			res: fold_many0!(
+				preceded!(p!("|"), call_m!(self.xor)),
+				acc,
+				|mut acc, val: EvalResult| {
+					acc |= &val;
+					acc
+				}
+			) >> (res)
 		))
 	);
 

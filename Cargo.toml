@@ -9,7 +9,7 @@ repository = "https://github.com/jethrogb/rust-cexpr"
 keywords = ["C","expression","parser"]
 
 [dependencies]
-nom = "^1"
+nom = {version = "^3", features = ["verbose-errors"] }
 
 [dev-dependencies]
 clang-sys = "0.11.0"
