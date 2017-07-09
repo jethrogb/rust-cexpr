@@ -110,9 +110,9 @@ unsafe fn location_in_scope(r: CXSourceRange) -> bool {
 		&& file.0!=ptr::null_mut()
 }
 
-fn test_file(file: &str) -> bool {
-	let mut idents=HashMap::new();
-	let mut all_succeeded=true;
+/// tokenize_range_adjust can be used to work around LLVM bug 9069
+/// https://bugs.llvm.org//show_bug.cgi?id=9069
+fn file_visit_macros<F: FnMut(Vec<u8>, Vec<Token>)>(file: &str, tokenize_range_adjust: bool, mut visitor: F) {
 	unsafe {
 		let tu={
 			let index=clang_createIndex(true as _, false as _);
@@ -132,7 +132,7 @@ fn test_file(file: &str) -> bool {
 			if cur.kind==CXCursor_MacroDefinition {
 				let mut range=clang_getCursorExtent(cur);
 				if !location_in_scope(range) { return CXChildVisit_Continue }
-				range.end_int_data-=1; // clang bug for macros only
+				range.end_int_data-=if tokenize_range_adjust { 1 } else { 0 };
 				let mut token_ptr=ptr::null_mut();
 				let mut num=0;
 				clang_tokenize(tu,range,&mut token_ptr,&mut num);
@@ -146,14 +146,42 @@ fn test_file(file: &str) -> bool {
 						}
 					).collect();
 					clang_disposeTokens(tu,token_ptr,num);
-					all_succeeded&=test_definition(clang_str_to_vec(clang_getCursorSpelling(cur)),&tokens,&mut idents);
+					visitor(clang_str_to_vec(clang_getCursorSpelling(cur)),tokens)
 				}
 			}
 			CXChildVisit_Continue
 		});
 		clang_disposeTranslationUnit(tu);
 	};
+}
+
+fn test_file(file: &str) -> bool {
+	let mut idents=HashMap::new();
+	let mut all_succeeded=true;
+	file_visit_macros(file, fix_bug_9069(), |ident, tokens| all_succeeded&=test_definition(ident, &tokens, &mut idents));
 	all_succeeded
+}
+
+fn fix_bug_9069() -> bool {
+	fn check_bug_9069() -> bool {
+		let mut token_sets = vec![];
+		file_visit_macros("tests/input/test_llvm_bug_9069.h", false, |ident, tokens| {
+			assert_eq!(&ident, b"A");
+			token_sets.push(tokens);
+		});
+		assert_eq!(token_sets.len(), 2);
+		token_sets[0] != token_sets[1]
+	}
+
+	use std::sync::{Once, ONCE_INIT};
+	use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT, Ordering};
+
+	static CHECK_FIX: Once = ONCE_INIT;
+	static FIX: AtomicBool = ATOMIC_BOOL_INIT;
+
+	CHECK_FIX.call_once(|| FIX.store(check_bug_9069(), Ordering::SeqCst));
+
+	FIX.load(Ordering::SeqCst)
 }
 
 macro_rules! test_file {
