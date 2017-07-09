@@ -85,9 +85,9 @@ impl From<Vec<u8>> for EvalResult {
 // ===========================================
 
 macro_rules! exact_token (
-	($i:expr, $k: ident, $c: expr) => ({
+	($i:expr, $k:ident, $c:expr) => ({
 		if $i.is_empty() {
-			let res: CResult<&[u8]> = IResult::Incomplete(Needed::Size(1));
+			let res: CResult<&[u8]> = IResult::Incomplete(Needed::Size($c.len()));
 			res
 		} else {
 			if $i[0].kind==TokenKind::$k && &$i[0].raw[..]==$c {
@@ -100,7 +100,7 @@ macro_rules! exact_token (
 );
 
 macro_rules! typed_token (
-	($i:expr, $k: ident) => ({
+	($i:expr, $k:ident) => ({
 		if $i.is_empty() {
 			let res: CResult<&[u8]> = IResult::Incomplete(Needed::Size(1));
 			res
@@ -126,7 +126,24 @@ macro_rules! any_token (
 );
 
 macro_rules! p (
-	($i:expr, $c: expr) => (exact_token!($i,Punctuation,$c.as_bytes()))
+	($i:expr, $c:expr) => (exact_token!($i,Punctuation,$c.as_bytes()))
+);
+
+macro_rules! one_of_punctuation (
+	($i:expr, $c:expr) => ({
+		if $i.is_empty() {
+			let min = $c.iter().map(|opt|opt.len()).min().expect("at least one option");
+			let res: CResult<&[u8]> = IResult::Incomplete(Needed::Size(min));
+			res
+		} else {
+			if $i[0].kind==TokenKind::Punctuation && $c.iter().any(|opt|opt.as_bytes()==&$i[0].raw[..]) {
+				IResult::Done(&$i[1..], &$i[0].raw[..])
+			} else {
+				const VAILD_VALUES: &'static [&'static str] = &$c;
+				IResult::Error(Err::Position(ErrorKind::Custom(::Error::ExactTokens(TokenKind::Punctuation,VAILD_VALUES)), $i))
+			}
+		}
+	});
 );
 
 // ==================================================
@@ -264,7 +281,7 @@ impl<'a> PRef<'a> {
 			delimited!(p!("("),call_m!(self.numeric_expr),p!(")")) |
 			numeric!(call_m!(self.literal)) |
 			numeric!(call_m!(self.identifier)) |
-			map_opt!(pair!(alt!( p!("+") | p!("-") | p!("~") ),call_m!(self.unary)),unary_op)
+			map_opt!(pair!(one_of_punctuation!(["+", "-", "~"]),call_m!(self.unary)),unary_op)
 		)
 	);
 
@@ -272,18 +289,14 @@ impl<'a> PRef<'a> {
 		do_parse!(
 			acc: call_m!(self.unary) >>
 			res: fold_many0!(
-				alt!(
-					pair!(p!("*"), call_m!(self.unary)) |
-					pair!(p!("/"), call_m!(self.unary)) |
-					pair!(p!("%"), call_m!(self.unary))
-				),
+				pair!(one_of_punctuation!(["*", "/", "%"]), call_m!(self.unary)),
 				acc,
 				|mut acc, (op, val): (&[u8], EvalResult)| {
 					 match op[0] as char {
 						'*' => acc *= &val,
 						'/' => acc /= &val,
 						'%' => acc %= &val,
-						_   => {}, // will not happen anyway
+						_   => unreachable!()
 					};
 					acc
 				}
@@ -295,20 +308,17 @@ impl<'a> PRef<'a> {
 		do_parse!(
 			acc: call_m!(self.mul_div_rem) >>
 			res: fold_many0!(
-			alt!(
-				pair!(p!("+"), call_m!(self.mul_div_rem)) |
-				pair!(p!("-"), call_m!(self.mul_div_rem))
-			),
-			acc,
-			|mut acc, (op, val): (&[u8], EvalResult)| {
-				match op[0] as char {
-					'+' => acc += &val,
-					'-' => acc -= &val,
-					_   => {},
-				};
-				acc
-			}
-)			 >> (res)
+				pair!(one_of_punctuation!(["+", "-"]), call_m!(self.unary)),
+				acc,
+				|mut acc, (op, val): (&[u8], EvalResult)| {
+					match op[0] as char {
+						'+' => acc += &val,
+						'-' => acc -= &val,
+						_   => unreachable!()
+					};
+					acc
+				}
+			) >> (res)
 		)
 	);
 
@@ -316,16 +326,13 @@ impl<'a> PRef<'a> {
 		numeric!(do_parse!(
 			acc: call_m!(self.add_sub) >>
 			res: fold_many0!(
-				alt!(
-					pair!(p!("<<"), call_m!(self.add_sub)) |
-					pair!(p!(">>"), call_m!(self.add_sub))
-				),
+				pair!(one_of_punctuation!(["<<", ">>"]), call_m!(self.unary)),
 				acc,
 				|mut acc, (op, val): (&[u8], EvalResult)| {
 					match op {
 						b"<<" => acc <<= &val,
 						b">>" => acc >>= &val,
-						_     => {},
+						_     => unreachable!()
 					};
 					acc
 				}
@@ -353,7 +360,7 @@ impl<'a> PRef<'a> {
 			res: fold_many0!(
 				preceded!(p!("^"), call_m!(self.and)),
 				acc,
-			|	mut acc, val: EvalResult| {
+				|mut acc, val: EvalResult| {
 					acc ^= &val;
 					acc
 				}
