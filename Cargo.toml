@@ -1,10 +1,10 @@
 [package]
 name = "cexpr"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Jethro Beekman <jethro@jbeekman.nl>"]
 license = "Apache-2.0/MIT"
 description = "A C expression parser and evaluator"
-documentation = "https://jethrogb.github.io/rust-cexpr/cexpr"
+documentation = "https://docs.rs/cexpr/"
 repository = "https://github.com/jethrogb/rust-cexpr"
 keywords = ["C","expression","parser"]
 
