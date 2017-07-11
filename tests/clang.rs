@@ -16,6 +16,7 @@ use clang_sys::*;
 use cexpr::token::Token;
 use cexpr::expr::{IdentifierParser,EvalResult,fn_macro_declaration};
 use cexpr::literal::CChar;
+use cexpr::assert_full_parse;
 
 // main testing routine
 fn test_definition(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8>,EvalResult>) -> bool {
@@ -84,7 +85,7 @@ fn test_definition(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8
 				return false;
 			}
 		}
-		IdentifierParser::new(&fnidents).expr(&expr_tokens)
+		assert_full_parse(IdentifierParser::new(&fnidents).expr(&expr_tokens))
 	} else {
 		IdentifierParser::new(idents).macro_definition(&tokens).map(|(_,val)|val)
 	};
