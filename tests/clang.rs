@@ -14,25 +14,44 @@ use std::collections::HashMap;
 
 use clang_sys::*;
 use cexpr::token::Token;
-use cexpr::expr::{IdentifierParser,EvalResult};
+use cexpr::expr::{IdentifierParser,EvalResult,fn_macro_declaration};
 use cexpr::literal::CChar;
 
 // main testing routine
 fn test_definition(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8>,EvalResult>) -> bool {
+	fn bytes_to_int(value: &[u8]) -> Option<EvalResult> {
+		str::from_utf8(value).ok()
+			.map(|s|s.replace("n","-"))
+			.map(|s|s.replace("_",""))
+			.and_then(|v|i64::from_str(&v).ok())
+			.map(::std::num::Wrapping)
+			.map(Int)
+	}
+
 	use cexpr::expr::EvalResult::*;
 
 	let display_name=String::from_utf8_lossy(&ident).into_owned();
 
+	let functional;
 	let test={
 		// Split name such as Str_test_string into (Str,test_string)
 		let pos=ident.iter().position(|c|*c==b'_').expect(&format!("Invalid definition in testcase: {}",display_name));
-		let expected=&ident[..pos];
-		let value=&ident[(pos+1)..];
+		let mut expected=&ident[..pos];
+		let mut value=&ident[(pos+1)..];
+
+		functional=expected==b"Fn";
+
+		if functional {
+			let ident=value;
+			let pos=ident.iter().position(|c|*c==b'_').expect(&format!("Invalid definition in testcase: {}",display_name));
+			expected=&ident[..pos];
+			value=&ident[(pos+1)..];
+		}
 
 		if expected==b"Str" {
 			Some(Str(value.to_owned()))
 		} else if expected==b"Int" {
-			str::from_utf8(value).ok().map(|s|s.replace("n","-")).and_then(|v|i64::from_str(&v).ok()).map(::std::num::Wrapping).map(Int)
+			bytes_to_int(value)
 		} else if expected==b"Float" {
 			str::from_utf8(value).ok().map(|s|s.replace("n","-").replace("p",".")).and_then(|v|f64::from_str(&v).ok()).map(Float)
 		} else if expected==b"CharRaw" {
@@ -44,8 +63,34 @@ fn test_definition(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8
 		}.expect(&format!("Invalid definition in testcase: {}",display_name))
 	};
 
-	match IdentifierParser::new(idents).macro_definition(&tokens) {
-		cexpr::nom::IResult::Done(_,(_,val)) => {
+	let result = if functional {
+		let mut fnidents;
+		let expr_tokens;
+		match fn_macro_declaration(&tokens) {
+			cexpr::nom::IResult::Done(rest,(_,args)) => {
+				fnidents=idents.clone();
+				expr_tokens=rest;
+				for arg in args {
+					let val = match test {
+						Int(_) => bytes_to_int(&arg),
+						Str(_) => Some(Str(arg.to_owned())),
+						_ => unimplemented!()
+					}.expect(&format!("Invalid argument in functional macro testcase: {}",display_name));
+					fnidents.insert(arg.to_owned(), val);
+				}
+			},
+			e => {
+				println!("Failed test for {}, unable to parse functional macro declaration: {:?}",display_name,e);
+				return false;
+			}
+		}
+		IdentifierParser::new(&fnidents).expr(&expr_tokens)
+	} else {
+		IdentifierParser::new(idents).macro_definition(&tokens).map(|(_,val)|val)
+	};
+
+	match result {
+		cexpr::nom::IResult::Done(_,val) => {
 			if val==test {
 				if let Some(_)=idents.insert(ident,val) {
 					panic!("Duplicate definition for testcase: {}",display_name);
@@ -56,7 +101,7 @@ fn test_definition(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8
 				false
 			}
 		},
-		e @ _ => {
+		e => {
 			if test==Invalid {
 				true
 			} else {

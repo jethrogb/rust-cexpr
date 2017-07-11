@@ -14,7 +14,7 @@
 //!
 //! The `sizeof` operator is not supported.
 //!
-//! String concatenation is supported, but width prefixes are ignored all
+//! String concatenation is supported, but width prefixes are ignored; all
 //! strings are treated as narrow strings.
 //!
 //! Use the `IdentifierParser` to substitute identifiers found in expressions.
@@ -524,3 +524,54 @@ pub fn expr<'a>(input: &'a [Token]) -> CResult<'a,EvalResult> {
 pub fn macro_definition<'a>(input: &'a [Token]) -> CResult<'a,(&'a [u8],EvalResult)> {
 	IdentifierParser::new(&HashMap::new()).macro_definition(input)
 }
+
+named_attr!(
+/// Parse a functional macro declaration from a list of tokens.
+///
+/// Returns the identifier for the macro and the argument list (in order). The
+/// input should not include `#define`. The actual definition is not parsed and
+/// may be obtained from the unparsed data returned.
+///
+/// Returns an error if the input is not a functional macro or if the token
+/// stream contains comments.
+///
+/// # Example
+/// ```
+/// use cexpr::expr::{IdentifierParser, EvalResult, fn_macro_declaration};
+/// use cexpr::assert_full_parse;
+/// use cexpr::token::Kind::*;
+/// use cexpr::token::Token;
+///
+/// // #define SUFFIX(arg) arg "suffix"
+/// let tokens = vec![
+///     (Identifier,  &b"SUFFIX"[..]).into(),
+///     (Punctuation, &b"("[..]).into(),
+///     (Identifier,  &b"arg"[..]).into(),
+///     (Punctuation, &b")"[..]).into(),
+///     (Identifier,  &b"arg"[..]).into(),
+///     (Literal,     &br#""suffix""#[..]).into(),
+/// ];
+///
+/// // Try to parse the functional part
+/// let (expr, (ident, args)) = fn_macro_declaration(&tokens).unwrap();
+/// assert_eq!(ident, b"SUFFIX");
+///
+/// // Create dummy arguments
+/// let idents = args.into_iter().map(|arg|
+///     (arg.to_owned(), EvalResult::Str(b"test".to_vec()))
+/// ).collect();
+///
+/// // Evaluate the macro
+/// let (_, evaluated) = assert_full_parse(IdentifierParser::new(&idents).expr(expr)).unwrap();
+/// assert_eq!(evaluated, EvalResult::Str(b"testsuffix".to_vec()));
+/// ```
+,pub fn_macro_declaration<&[Token],(&[u8],Vec<&[u8]>),::Error>,
+	pair!(
+		typed_token!(Identifier),
+		delimited!(
+			p!("("),
+			separated_list!(p!(","), typed_token!(Identifier)),
+			p!(")")
+		)
+	)
+);

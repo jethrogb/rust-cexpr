@@ -24,7 +24,7 @@ use nom::*;
 pub enum Error {
     /// Expected the specified token
 	ExactToken(token::Kind,&'static [u8]),
-    /// Expected the specified token
+    /// Expected one of the specified tokens
 	ExactTokens(token::Kind,&'static [&'static str]),
     /// Expected a token of the specified kind
 	TypedToken(token::Kind),
