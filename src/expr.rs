@@ -308,7 +308,7 @@ impl<'a> PRef<'a> {
 		do_parse!(
 			acc: call_m!(self.mul_div_rem) >>
 			res: fold_many0!(
-				pair!(one_of_punctuation!(["+", "-"]), call_m!(self.unary)),
+				pair!(one_of_punctuation!(["+", "-"]), call_m!(self.mul_div_rem)),
 				acc,
 				|mut acc, (op, val): (&[u8], EvalResult)| {
 					match op[0] as char {
@@ -326,7 +326,7 @@ impl<'a> PRef<'a> {
 		numeric!(do_parse!(
 			acc: call_m!(self.add_sub) >>
 			res: fold_many0!(
-				pair!(one_of_punctuation!(["<<", ">>"]), call_m!(self.unary)),
+				pair!(one_of_punctuation!(["<<", ">>"]), call_m!(self.add_sub)),
 				acc,
 				|mut acc, (op, val): (&[u8], EvalResult)| {
 					match op {
