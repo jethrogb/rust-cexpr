@@ -440,8 +440,8 @@ impl<'a> PRef<'a> {
 
 	method!(expr<PRef<'a>,&[Token],EvalResult,::Error>, mut self,
 		alt!(
-			delimited!(p!("("),call_m!(self.expr),p!(")")) |
 			call_m!(self.numeric_expr) |
+			delimited!(p!("("),call_m!(self.expr),p!(")")) |
 			call_m!(self.concat_str) |
 			call_m!(self.literal) |
 			call_m!(self.identifier)
