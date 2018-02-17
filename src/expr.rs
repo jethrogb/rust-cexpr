@@ -114,6 +114,7 @@ macro_rules! typed_token (
 	});
 );
 
+#[allow(unused_macros)]
 macro_rules! any_token (
 	($i:expr,) => ({
 		if $i.is_empty() {
