@@ -147,6 +147,28 @@ macro_rules! one_of_punctuation (
 	});
 );
 
+/// equivalent to nom's complete! macro, but adds the custom error type
+#[macro_export]
+macro_rules! comp (
+	($i:expr, $submac:ident!( $($args:tt)* )) => (
+		{
+			use ::nom_crate::lib::std::result::Result::*;
+			use ::nom_crate::{Err,ErrorKind};
+
+			let i_ = $i.clone();
+			match $submac!(i_, $($args)*) {
+				Err(Err::Incomplete(_)) =>  {
+					Err(Err::Error(error_position!($i, ErrorKind::Complete::<::Error>)))
+				},
+				rest => rest
+			}
+		}
+		);
+	($i:expr, $f:expr) => (
+		comp!($i, call!($f));
+		);
+	);
+
 // ==================================================
 // ============= Numeric expressions ================
 // ==================================================
@@ -290,7 +312,7 @@ impl<'a> PRef<'a> {
 		do_parse!(
 			acc: call_m!(self.unary) >>
 			res: fold_many0!(
-				pair!(one_of_punctuation!(["*", "/", "%"]), call_m!(self.unary)),
+				pair!(comp!(one_of_punctuation!(["*", "/", "%"])), call_m!(self.unary)),
 				acc,
 				|mut acc, (op, val): (&[u8], EvalResult)| {
 					 match op[0] as char {
@@ -309,7 +331,7 @@ impl<'a> PRef<'a> {
 		do_parse!(
 			acc: call_m!(self.mul_div_rem) >>
 			res: fold_many0!(
-				pair!(one_of_punctuation!(["+", "-"]), call_m!(self.mul_div_rem)),
+				pair!(comp!(one_of_punctuation!(["+", "-"])), call_m!(self.mul_div_rem)),
 				acc,
 				|mut acc, (op, val): (&[u8], EvalResult)| {
 					match op[0] as char {
@@ -327,7 +349,7 @@ impl<'a> PRef<'a> {
 		numeric!(do_parse!(
 			acc: call_m!(self.add_sub) >>
 			res: fold_many0!(
-				pair!(one_of_punctuation!(["<<", ">>"]), call_m!(self.add_sub)),
+				pair!(comp!(one_of_punctuation!(["<<", ">>"])), call_m!(self.add_sub)),
 				acc,
 				|mut acc, (op, val): (&[u8], EvalResult)| {
 					match op {
@@ -345,7 +367,7 @@ impl<'a> PRef<'a> {
 		numeric!(do_parse!(
 			acc: call_m!(self.shl_shr) >>
 			res: fold_many0!(
-				preceded!(p!("&"), call_m!(self.shl_shr)),
+				preceded!(comp!(p!("&")), call_m!(self.shl_shr)),
 				acc,
 				|mut acc, val: EvalResult| {
 					acc &= &val;
@@ -359,7 +381,7 @@ impl<'a> PRef<'a> {
 		numeric!(do_parse!(
 			acc: call_m!(self.and) >>
 			res: fold_many0!(
-				preceded!(p!("^"), call_m!(self.and)),
+				preceded!(comp!(p!("^")), call_m!(self.and)),
 				acc,
 				|mut acc, val: EvalResult| {
 					acc ^= &val;
@@ -373,7 +395,7 @@ impl<'a> PRef<'a> {
 		numeric!(do_parse!(
 			acc: call_m!(self.xor) >>
 			res: fold_many0!(
-				preceded!(p!("|"), call_m!(self.xor)),
+				preceded!(comp!(p!("|")), call_m!(self.xor)),
 				acc,
 				|mut acc, val: EvalResult| {
 					acc |= &val;
@@ -436,7 +458,7 @@ impl<'a> PRef<'a> {
 	// "string1" "string2" etc...
 	method!(concat_str<PRef<'a>,&[Token],EvalResult,::Error>, mut self,
 		map!(
-			pair!(call_m!(self.string),many0!(call_m!(self.string))),
+			pair!(call_m!(self.string),many0!(comp!(call_m!(self.string)))),
 			|(first,v)| Vec::into_iter(v).fold(first,|mut s,elem|{Vec::extend_from_slice(&mut s,Vec::<u8>::as_slice(&elem));s}).into()
 		)
 	);
