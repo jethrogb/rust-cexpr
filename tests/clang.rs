@@ -68,7 +68,7 @@ fn test_definition(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8
 		let mut fnidents;
 		let expr_tokens;
 		match fn_macro_declaration(&tokens) {
-			cexpr::nom::IResult::Done(rest,(_,args)) => {
+			Ok((rest,(_,args))) => {
 				fnidents=idents.clone();
 				expr_tokens=rest;
 				for arg in args {
@@ -87,11 +87,11 @@ fn test_definition(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8
 		}
 		assert_full_parse(IdentifierParser::new(&fnidents).expr(&expr_tokens))
 	} else {
-		IdentifierParser::new(idents).macro_definition(&tokens).map(|(_,val)|val)
+		IdentifierParser::new(idents).macro_definition(&tokens).map(|(i, (_,val))|(i, val))
 	};
 
 	match result {
-		cexpr::nom::IResult::Done(_,val) => {
+		Ok((_,val)) => {
 			if val==test {
 				if let Some(_)=idents.insert(ident,val) {
 					panic!("Duplicate definition for testcase: {}",display_name);

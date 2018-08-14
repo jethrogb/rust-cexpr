@@ -87,13 +87,13 @@ impl From<Vec<u8>> for EvalResult {
 macro_rules! exact_token (
 	($i:expr, $k:ident, $c:expr) => ({
 		if $i.is_empty() {
-			let res: CResult<&[u8]> = IResult::Incomplete(Needed::Size($c.len()));
+			let res: CResult<&[u8]> = Err(::nom_crate::Err::Incomplete(Needed::Size($c.len())));
 			res
 		} else {
 			if $i[0].kind==TokenKind::$k && &$i[0].raw[..]==$c {
-				IResult::Done(&$i[1..], &$i[0].raw[..])
+				Ok((&$i[1..], &$i[0].raw[..]))
 			} else {
-				IResult::Error(Err::Position(ErrorKind::Custom(::Error::ExactToken(TokenKind::$k,$c)), $i))
+				Err(::nom_crate::Err::Error(error_position!($i, ErrorKind::Custom(::Error::ExactToken(TokenKind::$k,$c)))))
 			}
 		}
 	});
@@ -102,13 +102,13 @@ macro_rules! exact_token (
 macro_rules! typed_token (
 	($i:expr, $k:ident) => ({
 		if $i.is_empty() {
-			let res: CResult<&[u8]> = IResult::Incomplete(Needed::Size(1));
+			let res: CResult<&[u8]> = Err(::nom_crate::Err::Incomplete(Needed::Size(1)));
 			res
 		} else {
 			if $i[0].kind==TokenKind::$k {
-				IResult::Done(&$i[1..], &$i[0].raw[..])
+				Ok((&$i[1..], &$i[0].raw[..]))
 			} else {
-				IResult::Error(Err::Position(ErrorKind::Custom(::Error::TypedToken(TokenKind::$k)), $i))
+				Err(Err::Error(error_position!($i, ErrorKind::Custom(::Error::TypedToken(TokenKind::$k)))))
 			}
 		}
 	});
@@ -118,10 +118,10 @@ macro_rules! typed_token (
 macro_rules! any_token (
 	($i:expr,) => ({
 		if $i.is_empty() {
-			let res: CResult<&Token> = IResult::Incomplete(Needed::Size(1));
+			let res: CResult<&Token> = Err(::nom_crate::Err::Incomplete(Needed::Size(1)));
 			res
 		} else {
-			IResult::Done(&$i[1..], &$i[0])
+			Ok((&$i[1..], &$i[0]))
 		}
 	});
 );
@@ -134,14 +134,14 @@ macro_rules! one_of_punctuation (
 	($i:expr, $c:expr) => ({
 		if $i.is_empty() {
 			let min = $c.iter().map(|opt|opt.len()).min().expect("at least one option");
-			let res: CResult<&[u8]> = IResult::Incomplete(Needed::Size(min));
+			let res: CResult<&[u8]> = Err(::nom_crate::Err::Incomplete(Needed::Size(min)));
 			res
 		} else {
 			if $i[0].kind==TokenKind::Punctuation && $c.iter().any(|opt|opt.as_bytes()==&$i[0].raw[..]) {
-				IResult::Done(&$i[1..], &$i[0].raw[..])
+				Ok((&$i[1..], &$i[0].raw[..]))
 			} else {
-				const VAILD_VALUES: &'static [&'static str] = &$c;
-				IResult::Error(Err::Position(ErrorKind::Custom(::Error::ExactTokens(TokenKind::Punctuation,VAILD_VALUES)), $i))
+				const VALID_VALUES: &'static [&'static str] = &$c;
+				Err(Err::Error(error_position!($i, ErrorKind::Custom(::Error::ExactTokens(TokenKind::Punctuation,VALID_VALUES)))))
 			}
 		}
 	});
@@ -397,30 +397,32 @@ impl<'a> PRef<'a> {
 	fn identifier(self, input: &[Token]) -> (Self,CResult<EvalResult>) {
 		(self,match input.split_first() {
 			None =>
-				IResult::Incomplete(Needed::Size(1)),
+				Err(Err::Incomplete(Needed::Size(1))),
 			Some((&Token{kind:TokenKind::Identifier,ref raw},rest)) => {
 				if let Some(r) = self.identifiers.get(&raw[..]) {
-					IResult::Done(rest, r.clone())
+					Ok((rest, r.clone()))
 				} else {
-					IResult::Error(Err::Position(ErrorKind::Custom(::Error::UnknownIdentifier), input))
+					Err(Err::Error(error_position!(input, ErrorKind::Custom(::Error::UnknownIdentifier))))
 				}
 			},
 			Some(_) =>
-				IResult::Error(Err::Position(ErrorKind::Custom(::Error::TypedToken(TokenKind::Identifier)), input)),
+				Err(Err::Error(error_position!(input, ErrorKind::Custom(::Error::TypedToken(TokenKind::Identifier))))),
 		})
 	}
 
 	fn literal(self, input: &[Token]) -> (Self,CResult<EvalResult>) {
 		(self,match input.split_first() {
 			None =>
-				IResult::Incomplete(Needed::Size(1)),
+				Err(Err::Incomplete(Needed::Size(1))),
 			Some((&Token{kind:TokenKind::Literal,ref raw},rest)) =>
 				match literal::parse(raw) {
-					IResult::Done(_,result) => IResult::Done(rest, result),
-					_ => IResult::Error(Err::Position(ErrorKind::Custom(::Error::InvalidLiteral), input))
+					Ok((_,result)) => Ok((rest, result)),
+					_ => {
+            Err(Err::Error(error_position!(input, ErrorKind::Custom(::Error::InvalidLiteral))))
+          },
 				},
 			Some(_) =>
-				IResult::Error(Err::Position(ErrorKind::Custom(::Error::TypedToken(TokenKind::Literal)), input)),
+				Err(Err::Error(error_position!(input, ErrorKind::Custom(::Error::TypedToken(TokenKind::Literal))))),
 		})
 	}
 

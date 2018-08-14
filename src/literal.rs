@@ -84,7 +84,7 @@ impl Into<Vec<u8>> for CChar {
 // ====================================================
 
 macro_rules! force_type (
-	($input:expr,IResult<$i:ty,$o:ty,$e:ty>) => (IResult::Error::<$i,$o,$e>(Err::Position(ErrorKind::Fix,$input)))
+	($input:expr,IResult<$i:ty,$o:ty,$e:ty>) => (Err::<($i,$o),Err<$i,$e>>(::nom_crate::Err::Error(error_position!($input, ErrorKind::Fix))))
 );
 
 
@@ -95,9 +95,9 @@ macro_rules! force_type (
 macro_rules! byte (
 	($i:expr, $($p: pat)|* ) => ({
 		match $i.split_first() {
-			$(Some((&c @ $p,rest)))|* => IResult::Done::<&[_],u8,u32>(rest,c),
-			Some(_) => IResult::Error(Err::Position(ErrorKind::OneOf,$i)),
-			None => IResult::Incomplete(Needed::Size(1)),
+			$(Some((&c @ $p,rest)))|* => Ok::<(&[_],u8),::nom_crate::Err<&[_],u32>>((rest,c)),
+			Some(_) => Err(::nom_crate::Err::Error(error_position!($i, ErrorKind::OneOf))),
+			None => Err(::nom_crate::Err::Incomplete(Needed::Size(1))),
 		}
 	})
 );
