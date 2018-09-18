@@ -40,9 +40,9 @@ pub enum Error {
 }
 
 impl From<u32> for Error {
-  fn from(_: u32) -> Self {
-    Error::InvalidLiteral
-  }
+	fn from(_: u32) -> Self {
+		Error::InvalidLiteral
+	}
 }
 
 macro_rules! identity (

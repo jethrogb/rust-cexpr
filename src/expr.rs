@@ -35,7 +35,7 @@ pub struct IdentifierParser<'ident> {
 #[derive(Copy,Clone)]
 struct PRef<'a>(&'a IdentifierParser<'a>);
 
-pub type CResult<'a,R:'a> = IResult<&'a [Token],R,::Error>;
+pub type CResult<'a,R> = IResult<&'a [Token],R,::Error>;
 
 /// The result of parsing a literal or evaluating an expression.
 #[derive(Debug,Clone,PartialEq)]
@@ -163,11 +163,11 @@ macro_rules! comp (
 				rest => rest
 			}
 		}
-		);
+	);
 	($i:expr, $f:expr) => (
 		comp!($i, call!($f));
-		);
 	);
+);
 
 // ==================================================
 // ============= Numeric expressions ================
@@ -519,7 +519,7 @@ impl<'ident> IdentifierParser<'ident> {
 	/// identifier, and the macro otherwise parses as an expression, it will
 	/// return a result even on function-like macros.
 	///
-	/// ```ignore
+	/// ```c
 	/// // will evaluate into IDENTIFIER
 	/// #define DELETE(IDENTIFIER)
 	/// // will evaluate into IDENTIFIER-3

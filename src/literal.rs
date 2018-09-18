@@ -85,22 +85,19 @@ macro_rules! full (
 	($i: expr, $submac:ident!( $($args:tt)* )) => (
 		{
 			use ::nom_crate::lib::std::result::Result::*;
-      let res =  $submac!($i, $($args)*);
-      match res {
-        Ok((i, o)) => {
-          if i.len() == 0 {
-            Ok((i, o))
-          } else {
-            Err(::nom_crate::Err::Error(error_position!(i, ::nom_crate::ErrorKind::Custom(42))))
-          }
-        },
-        r => r,
-      }
-    }
+			let res =  $submac!($i, $($args)*);
+			match res {
+				Ok((i, o)) => if i.len() == 0 {
+					Ok((i, o))
+				} else {
+					Err(::nom_crate::Err::Error(error_position!(i, ::nom_crate::ErrorKind::Custom(42))))
+				},
+				r => r,
+			}
+		}
 	);
-
-($i:expr, $f:ident) => (
-	full!($i, call!($f));
+	($i:expr, $f:ident) => (
+		full!($i, call!($f));
 	);
 );
 
@@ -194,17 +191,6 @@ named!(c_char<CChar>,
 	)
 );
 
-fn not_double_quotes(input: &[u8]) -> IResult<&[u8], &[u8]> {
-	use ::nom_crate::InputTakeAtPosition;
-	use std::str::from_utf8;
-
-	let r = input.split_at_position(|c| c == b'"');
-	match r {
-		Err(Err::Incomplete(_)) => Ok((&input[input.len()..], input)),
-		res => res,
-	}
-}
-
 named!(c_string<Vec<u8> >,
 	delimited!(
 		alt!( preceded!(c_width_prefix,char!('"')) | char!('"') ),
@@ -228,7 +214,6 @@ fn c_int_radix(n: Vec<u8>, radix: u32) -> Option<u64> {
 
 fn take_ul(input: &[u8]) -> IResult<&[u8], &[u8]> {
 	use ::nom_crate::InputTakeAtPosition;
-	use std::str::from_utf8;
 
 	let r = input.split_at_position(|c| c != b'u' && c != b'U' && c != b'l' && c != b'L');
 	match r {
