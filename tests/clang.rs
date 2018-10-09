@@ -149,11 +149,11 @@ unsafe fn visit_children<F>(cursor: CXCursor, mut f: F)
 
 unsafe fn location_in_scope(r: CXSourceRange) -> bool {
 	let start=clang_getRangeStart(r);
-	let mut file=CXFile(ptr::null_mut());
+	let mut file=ptr::null_mut();
 	clang_getSpellingLocation(start,&mut file,ptr::null_mut(),ptr::null_mut(),ptr::null_mut());
 	clang_Location_isFromMainFile(start)!=0
 		&& clang_Location_isInSystemHeader(start)==0
-		&& file.0!=ptr::null_mut()
+		&& file!=ptr::null_mut()
 }
 
 /// tokenize_range_adjust can be used to work around LLVM bug 9069

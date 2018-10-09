@@ -1,6 +1,6 @@
 [package]
 name = "cexpr"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Jethro Beekman <jethro@jbeekman.nl>"]
 license = "Apache-2.0/MIT"
 description = "A C expression parser and evaluator"
@@ -12,4 +12,4 @@ keywords = ["C","expression","parser"]
 nom = {version = "^4", features = ["verbose-errors"] }
 
 [dev-dependencies]
-clang-sys = "0.11.0"
+clang-sys = ">= 0.13.0, <= 0.26.0"
