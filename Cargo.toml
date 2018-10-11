@@ -12,4 +12,4 @@ keywords = ["C","expression","parser"]
 nom = {version = "^4", features = ["verbose-errors"] }
 
 [dev-dependencies]
-clang-sys = ">= 0.13.0, <= 0.26.0"
+clang-sys = ">= 0.13.0, < 0.27.0"
