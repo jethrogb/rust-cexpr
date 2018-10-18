@@ -256,8 +256,8 @@ named!(c_float<f64>,
 named!(one_literal<&[u8],EvalResult,::Error>,
 	fix_error!(::Error,alt_complete!(
 		map!(full!(c_char),EvalResult::Char) |
-		map!(full!(c_float),EvalResult::Float) |
 		map!(full!(c_int),|i|EvalResult::Int(::std::num::Wrapping(i))) |
+		map!(full!(c_float),EvalResult::Float) |
 		map!(full!(c_string),EvalResult::Str)
 	))
 );
