@@ -195,7 +195,7 @@ named!(c_string<Vec<u8> >,
 	delimited!(
 		alt!( preceded!(c_width_prefix,char!('"')) | char!('"') ),
 		fold_many0!(
-			alt!(map!(escaped_char, |c:CChar| c.into()) | map!(complete!(is_not!("\"")), |c: &[u8]| c.into())),
+			alt!(map!(escaped_char, |c:CChar| c.into()) | map!(is_not!([b'\\', b'"']), |c: &[u8]| c.into())),
 			Vec::new(),
 			|mut v: Vec<u8>, res:Vec<u8>| { v.extend_from_slice(&res); v }
 		),

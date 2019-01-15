@@ -9,6 +9,7 @@ extern crate cexpr;
 extern crate clang_sys;
 
 use std::{ptr,mem,ffi,slice,char};
+use std::io::Write;
 use std::str::{self,FromStr};
 use std::collections::HashMap;
 
@@ -50,7 +51,16 @@ fn test_definition(ident: Vec<u8>, tokens: &[Token], idents: &mut HashMap<Vec<u8
 		}
 
 		if expected==b"Str" {
-			Some(Str(value.to_owned()))
+			let mut splits=value.split(|c|*c==b'U');
+			let mut s=Vec::with_capacity(value.len());
+			s.extend_from_slice(splits.next().unwrap());
+			for split in splits {
+				let (chr,rest) = split.split_at(6);
+				let chr=u32::from_str_radix(str::from_utf8(chr).unwrap(),16).unwrap();
+				write!(s,"{}",char::from_u32(chr).unwrap()).unwrap();
+				s.extend_from_slice(rest);
+			}
+			Some(Str(s))
 		} else if expected==b"Int" {
 			bytes_to_int(value)
 		} else if expected==b"Float" {
