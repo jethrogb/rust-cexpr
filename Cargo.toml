@@ -1,6 +1,6 @@
 [package]
 name = "cexpr"
-version = "0.3.4"
+version = "0.3.5"
 authors = ["Jethro Beekman <jethro@jbeekman.nl>"]
 license = "Apache-2.0/MIT"
 description = "A C expression parser and evaluator"
@@ -15,4 +15,4 @@ travis-ci = { repository = "jethrogb/rust-cexpr" }
 nom = {version = "^4", features = ["verbose-errors"] }
 
 [dev-dependencies]
-clang-sys = ">= 0.13.0, < 0.28.0"
+clang-sys = ">= 0.13.0, < 0.29.0"
