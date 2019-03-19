@@ -8,6 +8,9 @@ documentation = "https://docs.rs/cexpr/"
 repository = "https://github.com/jethrogb/rust-cexpr"
 keywords = ["C","expression","parser"]
 
+[badges]
+travis-ci = { repository = "jethrogb/rust-cexpr" }
+
 [dependencies]
 nom = {version = "^4", features = ["verbose-errors"] }
 
