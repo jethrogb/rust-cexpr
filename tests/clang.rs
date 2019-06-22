@@ -254,3 +254,4 @@ test_file!(strings);
 test_file!(int_signed);
 test_file!(int_unsigned);
 test_file!(fail);
+test_file!(casts);
