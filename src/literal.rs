@@ -225,7 +225,9 @@ fn take_ul(input: &[u8]) -> IResult<&[u8], &[u8]> {
 named!(c_int<i64>,
 	map!(terminated!(alt_complete!(
 		map_opt!(preceded!(tag!("0x"),many1!(complete!(hexadecimal))),|v|c_int_radix(v,16)) |
+		map_opt!(preceded!(tag!("0X"),many1!(complete!(hexadecimal))),|v|c_int_radix(v,16)) |
 		map_opt!(preceded!(tag!("0b"),many1!(complete!(binary))),|v|c_int_radix(v,2)) |
+		map_opt!(preceded!(tag!("0B"),many1!(complete!(binary))),|v|c_int_radix(v,2)) |
 		map_opt!(preceded!(char!('0'),many1!(complete!(octal))),|v|c_int_radix(v,8)) |
 		map_opt!(many1!(complete!(decimal)),|v|c_int_radix(v,10)) |
 		force_type!(IResult<_,_,u32>)
