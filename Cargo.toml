@@ -2,6 +2,7 @@
 name = "cexpr"
 version = "0.3.6"
 authors = ["Jethro Beekman <jethro@jbeekman.nl>"]
+edition = "2018"
 license = "Apache-2.0/MIT"
 description = "A C expression parser and evaluator"
 documentation = "https://docs.rs/cexpr/"

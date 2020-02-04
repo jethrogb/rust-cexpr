@@ -41,7 +41,8 @@ use std::str::{self,FromStr};
 
 use nom_crate::*;
 
-use expr::EvalResult;
+use crate::expr::EvalResult;
+use crate::{Error, assert_full_parse};
 
 #[derive(Debug,Copy,Clone,PartialEq,Eq)]
 /// Representation of a C character
@@ -55,7 +56,7 @@ pub enum CChar {
 impl From<u8> for CChar {
 	fn from(i: u8) -> CChar {
 		match i {
-			0 ... 0x7f => CChar::Char(i as u8 as char),
+			0 ..= 0x7f => CChar::Char(i as u8 as char),
 			_ => CChar::Raw(i as u64),
 		}
 	}
@@ -84,13 +85,13 @@ impl Into<Vec<u8>> for CChar {
 macro_rules! full (
 	($i: expr, $submac:ident!( $($args:tt)* )) => (
 		{
-			use ::nom_crate::lib::std::result::Result::*;
+			use nom_crate::lib::std::result::Result::*;
 			let res =  $submac!($i, $($args)*);
 			match res {
 				Ok((i, o)) => if i.len() == 0 {
 					Ok((i, o))
 				} else {
-					Err(::nom_crate::Err::Error(error_position!(i, ::nom_crate::ErrorKind::Custom(42))))
+					Err(nom_crate::Err::Error(error_position!(i, nom_crate::ErrorKind::Custom(42))))
 				},
 				r => r,
 			}
@@ -106,7 +107,7 @@ macro_rules! full (
 // ====================================================
 
 macro_rules! force_type (
-	($input:expr,IResult<$i:ty,$o:ty,$e:ty>) => (Err::<($i,$o),Err<$i,$e>>(::nom_crate::Err::Error(error_position!($input, ErrorKind::Fix))))
+	($input:expr,IResult<$i:ty,$o:ty,$e:ty>) => (Err::<($i,$o),Err<$i,$e>>(nom_crate::Err::Error(error_position!($input, ErrorKind::Fix))))
 );
 
 
@@ -117,17 +118,17 @@ macro_rules! force_type (
 macro_rules! byte (
 	($i:expr, $($p: pat)|* ) => ({
 		match $i.split_first() {
-			$(Some((&c @ $p,rest)))|* => Ok::<(&[_],u8),::nom_crate::Err<&[_],u32>>((rest,c)),
-			Some(_) => Err(::nom_crate::Err::Error(error_position!($i, ErrorKind::OneOf))),
-			None => Err(::nom_crate::Err::Incomplete(Needed::Size(1))),
+			$(Some((&c @ $p,rest)))|* => Ok::<(&[_],u8),nom_crate::Err<&[_],u32>>((rest,c)),
+			Some(_) => Err(nom_crate::Err::Error(error_position!($i, ErrorKind::OneOf))),
+			None => Err(nom_crate::Err::Incomplete(Needed::Size(1))),
 		}
 	})
 );
 
-named!(binary<u8>,byte!(b'0' ... b'1'));
-named!(octal<u8>,byte!(b'0' ... b'7'));
-named!(decimal<u8>,byte!(b'0' ... b'9'));
-named!(hexadecimal<u8>,byte!(b'0' ... b'9' | b'a' ... b'f' | b'A' ... b'F'));
+named!(binary<u8>,byte!(b'0' ..= b'1'));
+named!(octal<u8>,byte!(b'0' ..= b'7'));
+named!(decimal<u8>,byte!(b'0' ..= b'9'));
+named!(hexadecimal<u8>,byte!(b'0' ..= b'9' | b'a' ..= b'f' | b'A' ..= b'F'));
 
 
 // ========================================
@@ -151,7 +152,7 @@ fn c_raw_escape(n: Vec<u8>, radix: u32) -> Option<CChar> {
 	str::from_utf8(&n).ok()
 		.and_then(|i|u64::from_str_radix(i,radix).ok())
 		.map(|i|match i {
-			0 ... 0x7f => CChar::Char(i as u8 as char),
+			0 ..= 0x7f => CChar::Char(i as u8 as char),
 			_ => CChar::Raw(i),
 		})
 }
@@ -186,7 +187,7 @@ named!(c_width_prefix,
 named!(c_char<CChar>,
 	delimited!(
 		terminated!(opt!(c_width_prefix),char!('\'')),
-		alt!( escaped_char | map!(byte!(0 ... 91 /* \=92 */ | 93 ... 255),CChar::from) ),
+		alt!( escaped_char | map!(byte!(0 ..= 91 /* \=92 */ | 93 ..= 255),CChar::from) ),
 		char!('\'')
 	)
 );
@@ -213,8 +214,6 @@ fn c_int_radix(n: Vec<u8>, radix: u32) -> Option<u64> {
 }
 
 fn take_ul(input: &[u8]) -> IResult<&[u8], &[u8]> {
-	use ::nom_crate::InputTakeAtPosition;
-
 	let r = input.split_at_position(|c| c != b'u' && c != b'U' && c != b'l' && c != b'L');
 	match r {
 		Err(Err::Incomplete(_)) => Ok((&input[input.len()..], input)),
@@ -255,8 +254,8 @@ named!(c_float<f64>,
 // ======== main interface ========
 // ================================
 
-named!(one_literal<&[u8],EvalResult,::Error>,
-	fix_error!(::Error,alt_complete!(
+named!(one_literal<&[u8],EvalResult,Error>,
+	fix_error!(Error,alt_complete!(
 		map!(full!(c_char),EvalResult::Char) |
 		map!(full!(c_int),|i|EvalResult::Int(::std::num::Wrapping(i))) |
 		map!(full!(c_float),EvalResult::Float) |
@@ -268,6 +267,6 @@ named!(one_literal<&[u8],EvalResult,::Error>,
 ///
 /// The input must contain exactly the representation of a single literal
 /// token, and in particular no whitespace or sign prefixes.
-pub fn parse(input: &[u8]) -> IResult<&[u8],EvalResult,::Error> {
-	::assert_full_parse(one_literal(input))
+pub fn parse(input: &[u8]) -> IResult<&[u8],EvalResult,Error> {
+	assert_full_parse(one_literal(input))
 }

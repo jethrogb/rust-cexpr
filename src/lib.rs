@@ -17,7 +17,7 @@ pub mod literal;
 pub mod expr;
 pub mod token;
 
-use nom::*;
+use crate::nom::*;
 
 #[derive(Debug)]
 /// Parsing errors specific to C parsing
@@ -51,13 +51,13 @@ macro_rules! identity (
 
 /// If the input result indicates a succesful parse, but there is data left,
 /// return an `Error::Partial` instead.
-pub fn assert_full_parse<I,O,E>(result: IResult<&[I],O,E>) -> IResult<&[I],O,::Error>
+pub fn assert_full_parse<I,O,E>(result: IResult<&[I],O,E>) -> IResult<&[I],O,Error>
   where Error: From<E> {
-	match fix_error!((),::Error,identity!(result)) {
+	match fix_error!((),Error,identity!(result)) {
 		Ok((rem,output)) => if rem.len()==0 {
 			Ok((rem, output))
 		} else {
-			Err(Err::Error(error_position!(rem, ErrorKind::Custom(::Error::Partial))))
+			Err(Err::Error(error_position!(rem, ErrorKind::Custom(Error::Partial))))
 		},
 		r => r,
 	}
