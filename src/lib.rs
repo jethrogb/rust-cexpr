@@ -5,19 +5,21 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+#![warn(rust_2018_idioms)]
+#![allow(deprecated)]
 
 #[macro_use]
 extern crate nom as nom_crate;
 
 pub mod nom {
     //! nom's result types, re-exported.
-    pub use nom_crate::{Err, ErrorKind, IResult, Needed};
+    pub use crate::nom_crate::{Err, ErrorKind, IResult, Needed};
 }
 pub mod expr;
 pub mod literal;
 pub mod token;
 
-use nom::*;
+use crate::nom::*;
 
 #[derive(Debug)]
 /// Parsing errors specific to C parsing
@@ -51,18 +53,18 @@ macro_rules! identity (
 
 /// If the input result indicates a succesful parse, but there is data left,
 /// return an `Error::Partial` instead.
-pub fn assert_full_parse<I, O, E>(result: IResult<&[I], O, E>) -> IResult<&[I], O, ::Error>
+pub fn assert_full_parse<I, O, E>(result: IResult<&[I], O, E>) -> IResult<&[I], O, crate::Error>
 where
     Error: From<E>,
 {
-    match fix_error!((), ::Error, identity!(result)) {
+    match fix_error!((), crate::Error, identity!(result)) {
         Ok((rem, output)) => {
             if rem.len() == 0 {
                 Ok((rem, output))
             } else {
                 Err(Err::Error(error_position!(
                     rem,
-                    ErrorKind::Custom(::Error::Partial)
+                    ErrorKind::Custom(crate::Error::Partial)
                 )))
             }
         }

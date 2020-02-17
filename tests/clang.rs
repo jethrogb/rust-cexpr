@@ -311,8 +311,8 @@ fn fix_bug_9069() -> bool {
     use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
     use std::sync::{Once, ONCE_INIT};
 
-    static CHECK_FIX: Once = ONCE_INIT;
-    static FIX: AtomicBool = ATOMIC_BOOL_INIT;
+    static CHECK_FIX: Once = Once::new();
+    static FIX: AtomicBool = AtomicBool::new(false);
 
     CHECK_FIX.call_once(|| FIX.store(check_bug_9069(), Ordering::SeqCst));
 
