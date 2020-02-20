@@ -122,6 +122,7 @@ macro_rules! typed_token (
 	});
 );
 
+#[allow(dead_code)]
 fn any_token(input: &[Token]) -> CResult<'_, &Token> {
     if input.is_empty() {
         let res: CResult<'_, &Token> = Err(crate::nom::Err::Incomplete(Needed::Size(1)));
@@ -303,26 +304,25 @@ impl<'a> PRef<'a> {
         use nom::combinator::map_opt;
         use nom::sequence::{delimited, pair};
         alt((
-            delimited(p("("), self.numeric_expr, p(")")),
-            numeric(self.literal),
-            numeric(self.identifier),
+            delimited(p("("), |i| self.numeric_expr(i), p(")")),
+            numeric(|i| self.literal(i)),
+            numeric(|i| self.identifier(i)),
             map_opt(
-                pair(one_of_punctuation(&["+", "-", "~"][..]), self.unary),
+                pair(one_of_punctuation(&["+", "-", "~"][..]), |i| self.unary(i)),
                 unary_op,
             ),
         ))(input)
     }
 
-    fn mul_div_rem<'t>(&'_ mut self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn mul_div_rem<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         use nom::combinator::complete;
         use nom::multi::fold_many0;
         use nom::sequence::pair;
         let (input, acc) = self.unary(input)?;
         fold_many0(
-            pair(
-                complete(one_of_punctuation(&["*", "/", "%"][..])),
-                self.unary,
-            ),
+            pair(complete(one_of_punctuation(&["*", "/", "%"][..])), |i| {
+                self.unary(i)
+            }),
             acc,
             |mut acc, (op, val): (&[u8], EvalResult)| {
                 match op[0] as char {
@@ -336,16 +336,15 @@ impl<'a> PRef<'a> {
         )(input)
     }
 
-    fn add_sub<'t>(&'_ mut self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn add_sub<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         use nom::combinator::complete;
         use nom::multi::fold_many0;
         use nom::sequence::pair;
         let (input, acc) = self.mul_div_rem(input)?;
         fold_many0(
-            pair(
-                complete(one_of_punctuation(&["+", "-"][..])),
-                self.mul_div_rem,
-            ),
+            pair(complete(one_of_punctuation(&["+", "-"][..])), |i| {
+                self.mul_div_rem(i)
+            }),
             acc,
             |mut acc, (op, val): (&[u8], EvalResult)| {
                 match op[0] as char {
@@ -358,16 +357,15 @@ impl<'a> PRef<'a> {
         )(input)
     }
 
-    fn shl_shr<'t>(&'_ mut self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn shl_shr<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         use nom::combinator::complete;
         use nom::multi::fold_many0;
         use nom::sequence::pair;
         let (input, acc) = self.add_sub(input)?;
         numeric(fold_many0(
-            pair(
-                complete(one_of_punctuation(&["<<", ">>"][..])),
-                self.add_sub,
-            ),
+            pair(complete(one_of_punctuation(&["<<", ">>"][..])), |i| {
+                self.add_sub(i)
+            }),
             acc,
             |mut acc, (op, val): (&[u8], EvalResult)| {
                 match op {
@@ -380,13 +378,13 @@ impl<'a> PRef<'a> {
         ))(input)
     }
 
-    fn and<'t>(&'_ mut self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn and<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         use nom::combinator::complete;
         use nom::multi::fold_many0;
         use nom::sequence::preceded;
         let (input, acc) = self.shl_shr(input)?;
         numeric(fold_many0(
-            preceded(complete(p("&")), self.shl_shr),
+            preceded(complete(p("&")), |i| self.shl_shr(i)),
             acc,
             |mut acc, val: EvalResult| {
                 acc &= &val;
@@ -395,13 +393,13 @@ impl<'a> PRef<'a> {
         ))(input)
     }
 
-    fn xor<'t>(&'_ mut self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn xor<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         use nom::combinator::complete;
         use nom::multi::fold_many0;
         use nom::sequence::preceded;
         let (input, acc) = self.and(input)?;
         numeric(fold_many0(
-            preceded(complete(p("^")), self.and),
+            preceded(complete(p("^")), |i| self.and(i)),
             acc,
             |mut acc, val: EvalResult| {
                 acc ^= &val;
@@ -410,13 +408,13 @@ impl<'a> PRef<'a> {
         ))(input)
     }
 
-    fn or<'t>(&'_ mut self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn or<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         use nom::combinator::complete;
         use nom::multi::fold_many0;
         use nom::sequence::preceded;
         let (input, acc) = self.xor(input)?;
         numeric(fold_many0(
-            preceded(complete(p("|")), self.xor),
+            preceded(complete(p("|")), |i| self.xor(i)),
             acc,
             |mut acc, val: EvalResult| {
                 acc |= &val;
@@ -426,7 +424,7 @@ impl<'a> PRef<'a> {
     }
 
     #[inline(always)]
-    fn numeric_expr<'t>(&'_ mut self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn numeric_expr<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         self.or(input)
     }
 }
@@ -479,24 +477,24 @@ impl<'a> PRef<'a> {
         }
     }
 
-    fn string<'t>(&'_ mut self, input: &'t [Token]) -> CResult<'t, Vec<u8>> {
+    fn string<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, Vec<u8>> {
         use nom::branch::alt;
         use nom::combinator::map_opt;
         alt((
-            map_opt(self.literal, EvalResult::as_str),
-            map_opt(self.identifier, EvalResult::as_str),
+            map_opt(|i| self.literal(i), EvalResult::as_str),
+            map_opt(|i| self.identifier(i), EvalResult::as_str),
         ))(input)
         .to_cexpr_result()
     }
 
     // "string1" "string2" etc...
-    fn concat_str<'t>(&'_ mut self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn concat_str<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         use nom::combinator::complete;
         use nom::combinator::map;
         use nom::multi::many0;
         use nom::sequence::pair;
         map(
-            pair(self.string, many0(complete(self.string))),
+            pair(|i| self.string(i), many0(complete(|i| self.string(i)))),
             |(first, v)| {
                 Vec::into_iter(v)
                     .fold(first, |mut s, elem| {
@@ -509,25 +507,22 @@ impl<'a> PRef<'a> {
         .to_cexpr_result()
     }
 
-    fn expr<'t>(&'_ mut self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn expr<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         use nom::branch::alt;
         use nom::sequence::delimited;
         alt((
-            self.numeric_expr,
-            delimited(p("("), self.expr, p(")")),
-            self.concat_str,
-            self.literal,
-            self.identifier,
+            |i| self.numeric_expr(i),
+            delimited(p("("), |i| self.expr(i), p(")")),
+            |i| self.concat_str(i),
+            |i| self.literal(i),
+            |i| self.identifier(i),
         ))(input)
         .to_cexpr_result()
     }
 
-    fn macro_definition<'t>(
-        &'_ mut self,
-        input: &'t [Token],
-    ) -> CResult<'t, (&'t [u8], EvalResult)> {
+    fn macro_definition<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, (&'t [u8], EvalResult)> {
         use nom::sequence::pair;
-        pair(typed_token!(Identifier), self.expr)(input)
+        pair(typed_token!(Identifier), |i| self.expr(i))(input)
     }
 }
 
