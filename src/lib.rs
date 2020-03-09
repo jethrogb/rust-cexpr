@@ -127,7 +127,7 @@ where
 {
     match result.to_cexpr_result() {
         Ok((rem, output)) => {
-            if rem.len() == 0 {
+            if rem.is_empty() {
                 Ok((rem, output))
             } else {
                 Err(nom::Err::Error((rem, ErrorKind::Partial).into()))

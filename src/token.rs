@@ -31,7 +31,7 @@ pub struct Token {
 impl<'a> From<(Kind, &'a [u8])> for Token {
     fn from((kind, value): (Kind, &'a [u8])) -> Token {
         Token {
-            kind: kind,
+            kind,
             raw: value.to_owned().into_boxed_slice(),
         }
     }
