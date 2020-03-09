@@ -9,32 +9,32 @@
 //!
 //! This is designed to map onto a libclang CXToken.
 
-#[derive(Debug,Copy,Clone,PartialEq,Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Kind {
-	Punctuation,
-	Keyword,
-	Identifier,
-	Literal,
-	Comment,
+    Punctuation,
+    Keyword,
+    Identifier,
+    Literal,
+    Comment,
 }
 
-#[derive(Debug,Clone,PartialEq,Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     pub kind: Kind,
     pub raw: Box<[u8]>,
 }
 
 impl<'a> From<(Kind, &'a [u8])> for Token {
-	fn from((kind, value): (Kind, &'a [u8])) -> Token {
-		Token {
-			kind: kind,
-			raw: value.to_owned().into_boxed_slice()
-		}
-	}
+    fn from((kind, value): (Kind, &'a [u8])) -> Token {
+        Token {
+            kind: kind,
+            raw: value.to_owned().into_boxed_slice(),
+        }
+    }
 }
 
 /// Remove all comment tokens from a vector of tokens
 pub fn remove_comments(v: &mut Vec<Token>) -> &mut Vec<Token> {
-	v.retain(|t|t.kind!=Kind::Comment);
-	v
+    v.retain(|t| t.kind != Kind::Comment);
+    v
 }

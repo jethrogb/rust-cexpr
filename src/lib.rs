@@ -5,44 +5,46 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+#![warn(rust_2018_idioms)]
+#![allow(deprecated)]
 
 #[macro_use]
 extern crate nom as nom_crate;
 
 pub mod nom {
     //! nom's result types, re-exported.
-    pub use nom_crate::{IResult,Needed,Err,ErrorKind};
+    pub use crate::nom_crate::{Err, ErrorKind, IResult, Needed};
 }
-pub mod literal;
 pub mod expr;
+pub mod literal;
 pub mod token;
 
-use nom::*;
+use crate::nom::*;
 
 #[derive(Debug)]
 /// Parsing errors specific to C parsing
 pub enum Error {
     /// Expected the specified token
-	ExactToken(token::Kind,&'static [u8]),
+    ExactToken(token::Kind, &'static [u8]),
     /// Expected one of the specified tokens
-	ExactTokens(token::Kind,&'static [&'static str]),
+    ExactTokens(token::Kind, &'static [&'static str]),
     /// Expected a token of the specified kind
-	TypedToken(token::Kind),
+    TypedToken(token::Kind),
     /// An unknown identifier was encountered
-	UnknownIdentifier,
+    UnknownIdentifier,
     /// An invalid literal was encountered.
     ///
     /// When encountered, this generally means a bug exists in the data that
     /// was passed in or the parsing logic.
-	InvalidLiteral,
+    InvalidLiteral,
     /// A full parse was requested, but data was left over after parsing finished.
     Partial,
 }
 
 impl From<u32> for Error {
-	fn from(_: u32) -> Self {
-		Error::InvalidLiteral
-	}
+    fn from(_: u32) -> Self {
+        Error::InvalidLiteral
+    }
 }
 
 macro_rules! identity (
@@ -51,14 +53,21 @@ macro_rules! identity (
 
 /// If the input result indicates a succesful parse, but there is data left,
 /// return an `Error::Partial` instead.
-pub fn assert_full_parse<I,O,E>(result: IResult<&[I],O,E>) -> IResult<&[I],O,::Error>
-  where Error: From<E> {
-	match fix_error!((),::Error,identity!(result)) {
-		Ok((rem,output)) => if rem.len()==0 {
-			Ok((rem, output))
-		} else {
-			Err(Err::Error(error_position!(rem, ErrorKind::Custom(::Error::Partial))))
-		},
-		r => r,
-	}
+pub fn assert_full_parse<I, O, E>(result: IResult<&[I], O, E>) -> IResult<&[I], O, crate::Error>
+where
+    Error: From<E>,
+{
+    match fix_error!((), crate::Error, identity!(result)) {
+        Ok((rem, output)) => {
+            if rem.len() == 0 {
+                Ok((rem, output))
+            } else {
+                Err(Err::Error(error_position!(
+                    rem,
+                    ErrorKind::Custom(crate::Error::Partial)
+                )))
+            }
+        }
+        r => r,
+    }
 }

@@ -1,6 +1,7 @@
 [package]
 name = "cexpr"
 version = "0.3.6"
+edition = "2018"
 authors = ["Jethro Beekman <jethro@jbeekman.nl>"]
 license = "Apache-2.0/MIT"
 description = "A C expression parser and evaluator"
