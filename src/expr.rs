@@ -43,10 +43,12 @@ pub struct IdentifierParser<'ident> {
 #[derive(Copy, Clone)]
 struct PRef<'a>(&'a IdentifierParser<'a>);
 
+/// A shorthand for the type of cexpr expression evaluation results.
 pub type CResult<'a, R> = IResult<&'a [Token], R, crate::Error<&'a [Token]>>;
 
 /// The result of parsing a literal or evaluating an expression.
 #[derive(Debug, Clone, PartialEq)]
+#[allow(missing_docs)]
 pub enum EvalResult {
     Int(Wrapping<i64>),
     Float(f64),

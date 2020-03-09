@@ -5,7 +5,16 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+//! A C expression parser and evaluator.
+//!
+//! This crate provides methods for parsing and evaluating simple C expressions. In general, the
+//! crate can handle most arithmetic expressions that would appear in macros or the definition of
+//! constants, as well as string and character constants.
+//!
+//! The main entry point for is [`token::parse`], which parses a byte string and returns its
+//! evaluated value.
 #![warn(rust_2018_idioms)]
+#![warn(missing_docs)]
 #![allow(deprecated)]
 
 pub mod nom {
