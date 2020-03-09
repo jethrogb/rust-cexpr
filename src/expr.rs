@@ -302,7 +302,7 @@ where
 }
 
 impl<'a> PRef<'a> {
-    fn unary<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn unary<'t>(&self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         alt((
             delimited(p("("), |i| self.numeric_expr(i), p(")")),
             numeric(|i| self.literal(i)),
@@ -314,7 +314,7 @@ impl<'a> PRef<'a> {
         ))(input)
     }
 
-    fn mul_div_rem<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn mul_div_rem<'t>(&self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         let (input, acc) = self.unary(input)?;
         fold_many0(
             pair(complete(one_of_punctuation(&["*", "/", "%"][..])), |i| {
@@ -333,7 +333,7 @@ impl<'a> PRef<'a> {
         )(input)
     }
 
-    fn add_sub<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn add_sub<'t>(&self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         let (input, acc) = self.mul_div_rem(input)?;
         fold_many0(
             pair(complete(one_of_punctuation(&["+", "-"][..])), |i| {
@@ -351,7 +351,7 @@ impl<'a> PRef<'a> {
         )(input)
     }
 
-    fn shl_shr<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn shl_shr<'t>(&self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         let (input, acc) = self.add_sub(input)?;
         numeric(fold_many0(
             pair(complete(one_of_punctuation(&["<<", ">>"][..])), |i| {
@@ -369,7 +369,7 @@ impl<'a> PRef<'a> {
         ))(input)
     }
 
-    fn and<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn and<'t>(&self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         let (input, acc) = self.shl_shr(input)?;
         numeric(fold_many0(
             preceded(complete(p("&")), |i| self.shl_shr(i)),
@@ -381,7 +381,7 @@ impl<'a> PRef<'a> {
         ))(input)
     }
 
-    fn xor<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn xor<'t>(&self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         let (input, acc) = self.and(input)?;
         numeric(fold_many0(
             preceded(complete(p("^")), |i| self.and(i)),
@@ -393,7 +393,7 @@ impl<'a> PRef<'a> {
         ))(input)
     }
 
-    fn or<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn or<'t>(&self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         let (input, acc) = self.xor(input)?;
         numeric(fold_many0(
             preceded(complete(p("|")), |i| self.xor(i)),
@@ -406,7 +406,7 @@ impl<'a> PRef<'a> {
     }
 
     #[inline(always)]
-    fn numeric_expr<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn numeric_expr<'t>(&self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         self.or(input)
     }
 }
@@ -416,7 +416,7 @@ impl<'a> PRef<'a> {
 // =======================================================
 
 impl<'a> PRef<'a> {
-    fn identifier<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn identifier<'t>(&self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         match input.split_first() {
             None => Err(Err::Incomplete(Needed::Size(1))),
             Some((
@@ -440,7 +440,7 @@ impl<'a> PRef<'a> {
         }
     }
 
-    fn literal<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn literal<'t>(&self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         match input.split_first() {
             None => Err(Err::Incomplete(Needed::Size(1))),
             Some((
@@ -459,7 +459,7 @@ impl<'a> PRef<'a> {
         }
     }
 
-    fn string<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, Vec<u8>> {
+    fn string<'t>(&self, input: &'t [Token]) -> CResult<'t, Vec<u8>> {
         alt((
             map_opt(|i| self.literal(i), EvalResult::as_str),
             map_opt(|i| self.identifier(i), EvalResult::as_str),
@@ -468,7 +468,7 @@ impl<'a> PRef<'a> {
     }
 
     // "string1" "string2" etc...
-    fn concat_str<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn concat_str<'t>(&self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         map(
             pair(|i| self.string(i), many0(complete(|i| self.string(i)))),
             |(first, v)| {
@@ -483,7 +483,7 @@ impl<'a> PRef<'a> {
         .to_cexpr_result()
     }
 
-    fn expr<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
+    fn expr<'t>(&self, input: &'t [Token]) -> CResult<'t, EvalResult> {
         alt((
             |i| self.numeric_expr(i),
             delimited(p("("), |i| self.expr(i), p(")")),
@@ -494,7 +494,7 @@ impl<'a> PRef<'a> {
         .to_cexpr_result()
     }
 
-    fn macro_definition<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, (&'t [u8], EvalResult)> {
+    fn macro_definition<'t>(&self, input: &'t [Token]) -> CResult<'t, (&'t [u8], EvalResult)> {
         pair(typed_token!(Identifier), |i| self.expr(i))(input)
     }
 }
@@ -524,7 +524,7 @@ impl<'ident> IdentifierParser<'ident> {
     ///
     /// Returns an error if the input is not a valid expression or if the token
     /// stream contains comments, keywords or unknown identifiers.
-    pub fn expr<'a>(&'_ self, input: &'a [Token]) -> CResult<'a, EvalResult> {
+    pub fn expr<'a>(&self, input: &'a [Token]) -> CResult<'a, EvalResult> {
         self.as_ref().expr(input)
     }
 
@@ -548,10 +548,7 @@ impl<'ident> IdentifierParser<'ident> {
     /// // will evaluate into IDENTIFIER-3
     /// #define NEGATIVE_THREE(IDENTIFIER)  -3
     /// ```
-    pub fn macro_definition<'a>(
-        &'_ self,
-        input: &'a [Token],
-    ) -> CResult<'a, (&'a [u8], EvalResult)> {
+    pub fn macro_definition<'a>(&self, input: &'a [Token]) -> CResult<'a, (&'a [u8], EvalResult)> {
         crate::assert_full_parse(self.as_ref().macro_definition(input))
     }
 }
