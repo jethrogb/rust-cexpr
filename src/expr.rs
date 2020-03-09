@@ -129,8 +129,7 @@ macro_rules! typed_token (
 #[allow(dead_code)]
 fn any_token(input: &[Token]) -> CResult<'_, &Token> {
     if input.is_empty() {
-        let res: CResult<'_, &Token> = Err(crate::nom::Err::Incomplete(Needed::Size(1)));
-        res
+        Err(crate::nom::Err::Incomplete(Needed::Size(1)))
     } else {
         Ok((&input[1..], &input[0]))
     }
