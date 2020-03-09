@@ -39,6 +39,13 @@
 use std::char;
 use std::str::{self, FromStr};
 
+use nom::branch::alt;
+use nom::bytes::complete::is_not;
+use nom::bytes::complete::tag;
+use nom::character::complete::{char, one_of};
+use nom::combinator::{complete, map, map_opt, opt, recognize};
+use nom::multi::{fold_many0, many0, many1, many_m_n};
+use nom::sequence::{delimited, pair, preceded, terminated, tuple};
 use nom::*;
 
 use crate::expr::EvalResult;
@@ -89,7 +96,6 @@ where
     F: Fn(I) -> nom::IResult<I, O, (I, E)>,
 {
     move |input| {
-        use nom::lib::std::result::Result::*;
         let res = f(input);
         match res {
             Ok((i, o)) => {
@@ -174,11 +180,6 @@ fn c_unicode_escape(n: Vec<u8>) -> Option<CChar> {
 }
 
 fn escaped_char(i: &[u8]) -> nom::IResult<&[u8], CChar> {
-    use nom::branch::alt;
-    use nom::character::complete::{char, one_of};
-    use nom::combinator::{map, map_opt};
-    use nom::multi::{many1, many_m_n};
-    use nom::sequence::preceded;
     preceded(
         char('\\'),
         alt((
@@ -201,16 +202,10 @@ fn escaped_char(i: &[u8]) -> nom::IResult<&[u8], CChar> {
 }
 
 fn c_width_prefix(i: &[u8]) -> nom::IResult<&[u8], &[u8]> {
-    use nom::branch::alt;
-    use nom::bytes::complete::tag;
     alt((tag("u8"), tag("u"), tag("U"), tag("L")))(i)
 }
 
 fn c_char(i: &[u8]) -> nom::IResult<&[u8], CChar> {
-    use nom::branch::alt;
-    use nom::character::complete::char;
-    use nom::combinator::{map, opt};
-    use nom::sequence::{delimited, terminated};
     delimited(
         terminated(opt(c_width_prefix), char('\'')),
         alt((
@@ -222,12 +217,6 @@ fn c_char(i: &[u8]) -> nom::IResult<&[u8], CChar> {
 }
 
 fn c_string(i: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
-    use nom::branch::alt;
-    use nom::bytes::complete::is_not;
-    use nom::character::complete::char;
-    use nom::combinator::map;
-    use nom::multi::fold_many0;
-    use nom::sequence::{delimited, preceded};
     delimited(
         alt((preceded(c_width_prefix, char('"')), char('"'))),
         fold_many0(
@@ -264,12 +253,6 @@ fn take_ul(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 fn c_int(i: &[u8]) -> nom::IResult<&[u8], i64> {
-    use nom::branch::alt;
-    use nom::bytes::complete::tag;
-    use nom::character::complete::char;
-    use nom::combinator::{complete, map, map_opt, opt};
-    use nom::multi::many1;
-    use nom::sequence::{preceded, terminated};
     map(
         terminated(
             alt((
@@ -306,9 +289,6 @@ fn float_width(i: &[u8]) -> nom::IResult<&[u8], u8> {
 }
 
 fn float_exp(i: &[u8]) -> nom::IResult<&[u8], (Option<u8>, Vec<u8>)> {
-    use nom::combinator::{complete, opt};
-    use nom::multi::many1;
-    use nom::sequence::{pair, preceded};
     preceded(
         byte!(b'e' | b'E'),
         pair(opt(byte!(b'-' | b'+')), many1(complete(decimal))),
@@ -316,10 +296,6 @@ fn float_exp(i: &[u8]) -> nom::IResult<&[u8], (Option<u8>, Vec<u8>)> {
 }
 
 fn c_float(i: &[u8]) -> nom::IResult<&[u8], f64> {
-    use nom::branch::alt;
-    use nom::combinator::{complete, map_opt, opt, recognize};
-    use nom::multi::{many0, many1};
-    use nom::sequence::{terminated, tuple};
     map_opt(
         alt((
             terminated(
@@ -367,9 +343,6 @@ fn c_float(i: &[u8]) -> nom::IResult<&[u8], f64> {
 // ================================
 
 fn one_literal(input: &[u8]) -> nom::IResult<&[u8], EvalResult, crate::Error<&[u8]>> {
-    use nom::branch::alt;
-    use nom::combinator::map;
-
     alt((
         map(full(c_char), EvalResult::Char),
         map(full(c_int), |i| EvalResult::Int(::std::num::Wrapping(i))),

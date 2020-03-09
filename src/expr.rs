@@ -29,6 +29,10 @@ use std::ops::{
 use crate::literal::{self, CChar};
 use crate::token::{Kind as TokenKind, Token};
 use crate::ToCexprResult;
+use nom::branch::alt;
+use nom::combinator::{complete, map, map_opt};
+use nom::multi::{fold_many0, many0, separated_list};
+use nom::sequence::{delimited, pair, preceded};
 use nom::*;
 
 /// Expression parser/evaluator that supports identifiers.
@@ -300,9 +304,6 @@ where
 
 impl<'a> PRef<'a> {
     fn unary<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
-        use nom::branch::alt;
-        use nom::combinator::map_opt;
-        use nom::sequence::{delimited, pair};
         alt((
             delimited(p("("), |i| self.numeric_expr(i), p(")")),
             numeric(|i| self.literal(i)),
@@ -315,9 +316,6 @@ impl<'a> PRef<'a> {
     }
 
     fn mul_div_rem<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
-        use nom::combinator::complete;
-        use nom::multi::fold_many0;
-        use nom::sequence::pair;
         let (input, acc) = self.unary(input)?;
         fold_many0(
             pair(complete(one_of_punctuation(&["*", "/", "%"][..])), |i| {
@@ -337,9 +335,6 @@ impl<'a> PRef<'a> {
     }
 
     fn add_sub<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
-        use nom::combinator::complete;
-        use nom::multi::fold_many0;
-        use nom::sequence::pair;
         let (input, acc) = self.mul_div_rem(input)?;
         fold_many0(
             pair(complete(one_of_punctuation(&["+", "-"][..])), |i| {
@@ -358,9 +353,6 @@ impl<'a> PRef<'a> {
     }
 
     fn shl_shr<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
-        use nom::combinator::complete;
-        use nom::multi::fold_many0;
-        use nom::sequence::pair;
         let (input, acc) = self.add_sub(input)?;
         numeric(fold_many0(
             pair(complete(one_of_punctuation(&["<<", ">>"][..])), |i| {
@@ -379,9 +371,6 @@ impl<'a> PRef<'a> {
     }
 
     fn and<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
-        use nom::combinator::complete;
-        use nom::multi::fold_many0;
-        use nom::sequence::preceded;
         let (input, acc) = self.shl_shr(input)?;
         numeric(fold_many0(
             preceded(complete(p("&")), |i| self.shl_shr(i)),
@@ -394,9 +383,6 @@ impl<'a> PRef<'a> {
     }
 
     fn xor<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
-        use nom::combinator::complete;
-        use nom::multi::fold_many0;
-        use nom::sequence::preceded;
         let (input, acc) = self.and(input)?;
         numeric(fold_many0(
             preceded(complete(p("^")), |i| self.and(i)),
@@ -409,9 +395,6 @@ impl<'a> PRef<'a> {
     }
 
     fn or<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
-        use nom::combinator::complete;
-        use nom::multi::fold_many0;
-        use nom::sequence::preceded;
         let (input, acc) = self.xor(input)?;
         numeric(fold_many0(
             preceded(complete(p("|")), |i| self.xor(i)),
@@ -478,8 +461,6 @@ impl<'a> PRef<'a> {
     }
 
     fn string<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, Vec<u8>> {
-        use nom::branch::alt;
-        use nom::combinator::map_opt;
         alt((
             map_opt(|i| self.literal(i), EvalResult::as_str),
             map_opt(|i| self.identifier(i), EvalResult::as_str),
@@ -489,10 +470,6 @@ impl<'a> PRef<'a> {
 
     // "string1" "string2" etc...
     fn concat_str<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
-        use nom::combinator::complete;
-        use nom::combinator::map;
-        use nom::multi::many0;
-        use nom::sequence::pair;
         map(
             pair(|i| self.string(i), many0(complete(|i| self.string(i)))),
             |(first, v)| {
@@ -508,8 +485,6 @@ impl<'a> PRef<'a> {
     }
 
     fn expr<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, EvalResult> {
-        use nom::branch::alt;
-        use nom::sequence::delimited;
         alt((
             |i| self.numeric_expr(i),
             delimited(p("("), |i| self.expr(i), p(")")),
@@ -521,7 +496,6 @@ impl<'a> PRef<'a> {
     }
 
     fn macro_definition<'t>(&'_ self, input: &'t [Token]) -> CResult<'t, (&'t [u8], EvalResult)> {
-        use nom::sequence::pair;
         pair(typed_token!(Identifier), |i| self.expr(i))(input)
     }
 }
@@ -643,8 +617,6 @@ pub fn macro_definition<'a>(input: &'a [Token]) -> CResult<'a, (&'a [u8], EvalRe
 /// assert_eq!(evaluated, EvalResult::Str(b"testsuffix".to_vec()));
 /// ```
 pub fn fn_macro_declaration(input: &[Token]) -> CResult<'_, (&[u8], Vec<&[u8]>)> {
-    use nom::multi::separated_list;
-    use nom::sequence::{delimited, pair};
     pair(
         typed_token!(Identifier),
         delimited(
