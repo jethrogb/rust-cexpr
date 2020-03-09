@@ -10,6 +10,7 @@
 //! This is designed to map onto a libclang CXToken.
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[allow(missing_docs)]
 pub enum Kind {
     Punctuation,
     Keyword,
@@ -18,16 +19,19 @@ pub enum Kind {
     Comment,
 }
 
+/// A single token in a C expression.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
+    /// The type of this token.
     pub kind: Kind,
+    /// The bytes that make up the token.
     pub raw: Box<[u8]>,
 }
 
 impl<'a> From<(Kind, &'a [u8])> for Token {
     fn from((kind, value): (Kind, &'a [u8])) -> Token {
         Token {
-            kind: kind,
+            kind,
             raw: value.to_owned().into_boxed_slice(),
         }
     }

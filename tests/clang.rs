@@ -235,7 +235,7 @@ fn file_visit_macros<F: FnMut(Vec<u8>, Vec<Token>)>(
         let tu = {
             let index = clang_createIndex(true as _, false as _);
             let cfile = ffi::CString::new(file).unwrap();
-            let mut tu = mem::uninitialized();
+            let mut tu = mem::MaybeUninit::uninit();
             assert!(
                 clang_parseTranslationUnit2(
                     index,
@@ -245,12 +245,12 @@ fn file_visit_macros<F: FnMut(Vec<u8>, Vec<Token>)>(
                     ptr::null_mut(),
                     0,
                     CXTranslationUnit_DetailedPreprocessingRecord,
-                    &mut tu
+                    &mut *tu.as_mut_ptr()
                 ) == CXError_Success,
                 "Failure reading test case {}",
                 file
             );
-            tu
+            tu.assume_init()
         };
         visit_children(clang_getTranslationUnitCursor(tu), |cur, _parent| {
             if cur.kind == CXCursor_MacroDefinition {
@@ -308,8 +308,8 @@ fn fix_bug_9069() -> bool {
         token_sets[0] != token_sets[1]
     }
 
-    use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
-    use std::sync::{Once, ONCE_INIT};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Once;
 
     static CHECK_FIX: Once = Once::new();
     static FIX: AtomicBool = AtomicBool::new(false);

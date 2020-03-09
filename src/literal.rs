@@ -39,9 +39,17 @@
 use std::char;
 use std::str::{self, FromStr};
 
-use crate::nom_crate::*;
+use nom::branch::alt;
+use nom::bytes::complete::is_not;
+use nom::bytes::complete::tag;
+use nom::character::complete::{char, one_of};
+use nom::combinator::{complete, map, map_opt, opt, recognize};
+use nom::multi::{fold_many0, many0, many1, many_m_n};
+use nom::sequence::{delimited, pair, preceded, terminated, tuple};
+use nom::*;
 
 use crate::expr::EvalResult;
+use crate::ToCexprResult;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 /// Representation of a C character
@@ -80,56 +88,61 @@ impl Into<Vec<u8>> for CChar {
 }
 
 /// ensures the child parser consumes the whole input
-#[macro_export]
-macro_rules! full (
-	($i: expr, $submac:ident!( $($args:tt)* )) => (
-		{
-			use crate::nom_crate::lib::std::result::Result::*;
-			let res =  $submac!($i, $($args)*);
-			match res {
-				Ok((i, o)) => if i.len() == 0 {
-					Ok((i, o))
-				} else {
-					Err(crate::nom_crate::Err::Error(error_position!(i, crate::nom_crate::ErrorKind::Custom(42))))
-				},
-				r => r,
-			}
-		}
-	);
-	($i:expr, $f:ident) => (
-		full!($i, call!($f));
-	);
-);
-
-// ====================================================
-// ======== macros that shouldn't be necessary ========
-// ====================================================
-
-macro_rules! force_type (
-	($input:expr,IResult<$i:ty,$o:ty,$e:ty>) => (Err::<($i,$o),Err<$i,$e>>(crate::nom_crate::Err::Error(error_position!($input, ErrorKind::Fix))))
-);
+pub fn full<I: Clone, O, E: From<nom::error::ErrorKind>, F>(
+    f: F,
+) -> impl Fn(I) -> nom::IResult<I, O, (I, E)>
+where
+    I: nom::InputLength,
+    F: Fn(I) -> nom::IResult<I, O, (I, E)>,
+{
+    move |input| {
+        let res = f(input);
+        match res {
+            Ok((i, o)) => {
+                if i.input_len() == 0 {
+                    Ok((i, o))
+                } else {
+                    Err(nom::Err::Error((i, nom::error::ErrorKind::Complete.into())))
+                }
+            }
+            r => r,
+        }
+    }
+}
 
 // =================================
 // ======== matching digits ========
 // =================================
 
-macro_rules! byte (
-	($i:expr, $($p: pat)|* ) => ({
-		match $i.split_first() {
-			$(Some((&c @ $p,rest)))|* => Ok::<(&[_],u8),crate::nom_crate::Err<&[_],u32>>((rest,c)),
-			Some(_) => Err(crate::nom_crate::Err::Error(error_position!($i, ErrorKind::OneOf))),
-			None => Err(crate::nom_crate::Err::Incomplete(Needed::Size(1))),
-		}
-	})
-);
+macro_rules! byte {
+	($($p: pat)|* ) => {{
+        fn parser(i: &[u8]) -> crate::nom::IResult<&[u8], u8> {
+            match i.split_first() {
+                $(Some((&c @ $p,rest)))|* => Ok((rest,c)),
+                Some(_) => Err(nom::Err::Error((i, nom::error::ErrorKind::OneOf))),
+                None => Err(nom::Err::Incomplete(Needed::Size(1))),
+            }
+        }
 
-named!(binary<u8>, byte!(b'0'..=b'1'));
-named!(octal<u8>, byte!(b'0'..=b'7'));
-named!(decimal<u8>, byte!(b'0'..=b'9'));
-named!(
-    hexadecimal<u8>,
-    byte!(b'0' ..= b'9' | b'a' ..= b'f' | b'A' ..= b'F')
-);
+        parser
+	}}
+}
+
+fn binary(i: &[u8]) -> nom::IResult<&[u8], u8> {
+    byte!(b'0'..=b'1')(i)
+}
+
+fn octal(i: &[u8]) -> nom::IResult<&[u8], u8> {
+    byte!(b'0'..=b'7')(i)
+}
+
+fn decimal(i: &[u8]) -> nom::IResult<&[u8], u8> {
+    byte!(b'0'..=b'9')(i)
+}
+
+fn hexadecimal(i: &[u8]) -> nom::IResult<&[u8], u8> {
+    byte!(b'0' ..= b'9' | b'a' ..= b'f' | b'A' ..= b'F')(i)
+}
 
 // ========================================
 // ======== characters and strings ========
@@ -166,62 +179,60 @@ fn c_unicode_escape(n: Vec<u8>) -> Option<CChar> {
         .map(CChar::Char)
 }
 
-named!(
-    escaped_char<CChar>,
-    preceded!(
-        complete!(char!('\\')),
-        alt_complete!(
-            map!(one_of!(r#"'"?\"#), CChar::Char)
-                | map!(one_of!("abfnrtv"), escape2char)
-                | map_opt!(many_m_n!(1, 3, octal), |v| c_raw_escape(v, 8))
-                | map_opt!(
-                    preceded!(char!('x'), many1!(hexadecimal)),
-                    |v| c_raw_escape(v, 16)
-                )
-                | map_opt!(
-                    preceded!(char!('u'), many_m_n!(4, 4, hexadecimal)),
-                    c_unicode_escape
-                )
-                | map_opt!(
-                    preceded!(char!('U'), many_m_n!(8, 8, hexadecimal)),
-                    c_unicode_escape
-                )
-        )
-    )
-);
-
-named!(
-    c_width_prefix,
-    alt!(tag!("u8") | tag!("u") | tag!("U") | tag!("L"))
-);
-
-named!(
-    c_char<CChar>,
-    delimited!(
-        terminated!(opt!(c_width_prefix), char!('\'')),
-        alt!(escaped_char | map!(byte!(0 ..= 91 /* \=92 */ | 93 ..= 255), CChar::from)),
-        char!('\'')
-    )
-);
-
-named!(
-    c_string<Vec<u8>>,
-    delimited!(
-        alt!(preceded!(c_width_prefix, char!('"')) | char!('"')),
-        fold_many0!(
-            alt!(
-                map!(escaped_char, |c: CChar| c.into())
-                    | map!(is_not!([b'\\', b'"']), |c: &[u8]| c.into())
+fn escaped_char(i: &[u8]) -> nom::IResult<&[u8], CChar> {
+    preceded(
+        char('\\'),
+        alt((
+            map(one_of(r#"'"?\"#), CChar::Char),
+            map(one_of("abfnrtv"), escape2char),
+            map_opt(many_m_n(1, 3, octal), |v| c_raw_escape(v, 8)),
+            map_opt(preceded(char('x'), many1(hexadecimal)), |v| {
+                c_raw_escape(v, 16)
+            }),
+            map_opt(
+                preceded(char('u'), many_m_n(4, 4, hexadecimal)),
+                c_unicode_escape,
             ),
+            map_opt(
+                preceded(char('U'), many_m_n(8, 8, hexadecimal)),
+                c_unicode_escape,
+            ),
+        )),
+    )(i)
+}
+
+fn c_width_prefix(i: &[u8]) -> nom::IResult<&[u8], &[u8]> {
+    alt((tag("u8"), tag("u"), tag("U"), tag("L")))(i)
+}
+
+fn c_char(i: &[u8]) -> nom::IResult<&[u8], CChar> {
+    delimited(
+        terminated(opt(c_width_prefix), char('\'')),
+        alt((
+            escaped_char,
+            map(byte!(0 ..= 91 /* \=92 */ | 93 ..= 255), CChar::from),
+        )),
+        char('\''),
+    )(i)
+}
+
+fn c_string(i: &[u8]) -> nom::IResult<&[u8], Vec<u8>> {
+    delimited(
+        alt((preceded(c_width_prefix, char('"')), char('"'))),
+        fold_many0(
+            alt((
+                map(escaped_char, |c: CChar| c.into()),
+                map(is_not([b'\\', b'"']), |c: &[u8]| c.into()),
+            )),
             Vec::new(),
             |mut v: Vec<u8>, res: Vec<u8>| {
                 v.extend_from_slice(&res);
                 v
-            }
+            },
         ),
-        char!('"')
-    )
-);
+        char('"'),
+    )(i)
+}
 
 // ================================
 // ======== parse integers ========
@@ -241,100 +252,110 @@ fn take_ul(input: &[u8]) -> IResult<&[u8], &[u8]> {
     }
 }
 
-named!(
-    c_int<i64>,
-    map!(
-        terminated!(
-            alt_complete!(
-                map_opt!(preceded!(tag!("0x"), many1!(complete!(hexadecimal))), |v| {
+fn c_int(i: &[u8]) -> nom::IResult<&[u8], i64> {
+    map(
+        terminated(
+            alt((
+                map_opt(preceded(tag("0x"), many1(complete(hexadecimal))), |v| {
                     c_int_radix(v, 16)
-                }) | map_opt!(preceded!(tag!("0X"), many1!(complete!(hexadecimal))), |v| {
+                }),
+                map_opt(preceded(tag("0X"), many1(complete(hexadecimal))), |v| {
                     c_int_radix(v, 16)
-                }) | map_opt!(preceded!(tag!("0b"), many1!(complete!(binary))), |v| {
+                }),
+                map_opt(preceded(tag("0b"), many1(complete(binary))), |v| {
                     c_int_radix(v, 2)
-                }) | map_opt!(preceded!(tag!("0B"), many1!(complete!(binary))), |v| {
+                }),
+                map_opt(preceded(tag("0B"), many1(complete(binary))), |v| {
                     c_int_radix(v, 2)
-                }) | map_opt!(preceded!(char!('0'), many1!(complete!(octal))), |v| {
+                }),
+                map_opt(preceded(char('0'), many1(complete(octal))), |v| {
                     c_int_radix(v, 8)
-                }) | map_opt!(many1!(complete!(decimal)), |v| c_int_radix(v, 10))
-                    | force_type!(IResult<_, _, u32>)
-            ),
-            opt!(take_ul)
+                }),
+                map_opt(many1(complete(decimal)), |v| c_int_radix(v, 10)),
+                |input| Err(crate::nom::Err::Error((input, crate::nom::ErrorKind::Fix))),
+            )),
+            opt(take_ul),
         ),
-        |i| i as i64
-    )
-);
+        |i| i as i64,
+    )(i)
+}
 
 // ==============================
 // ======== parse floats ========
 // ==============================
 
-named!(float_width<u8>, complete!(byte!(b'f' | b'l' | b'F' | b'L')));
-named!(
-    float_exp<(Option<u8>, Vec<u8>)>,
-    preceded!(
-        byte!(b'e' | b'E'),
-        pair!(opt!(byte!(b'-' | b'+')), many1!(complete!(decimal)))
-    )
-);
+fn float_width(i: &[u8]) -> nom::IResult<&[u8], u8> {
+    nom::combinator::complete(byte!(b'f' | b'l' | b'F' | b'L'))(i)
+}
 
-named!(
-    c_float<f64>,
-    map_opt!(
-        alt!(
-            terminated!(
-                recognize!(tuple!(
-                    many1!(complete!(decimal)),
+fn float_exp(i: &[u8]) -> nom::IResult<&[u8], (Option<u8>, Vec<u8>)> {
+    preceded(
+        byte!(b'e' | b'E'),
+        pair(opt(byte!(b'-' | b'+')), many1(complete(decimal))),
+    )(i)
+}
+
+fn c_float(i: &[u8]) -> nom::IResult<&[u8], f64> {
+    map_opt(
+        alt((
+            terminated(
+                recognize(tuple((
+                    many1(complete(decimal)),
                     byte!(b'.'),
-                    many0!(complete!(decimal))
-                )),
-                opt!(float_width)
-            ) | terminated!(
-                recognize!(tuple!(
-                    many0!(complete!(decimal)),
+                    many0(complete(decimal)),
+                ))),
+                opt(float_width),
+            ),
+            terminated(
+                recognize(tuple((
+                    many0(complete(decimal)),
                     byte!(b'.'),
-                    many1!(complete!(decimal))
-                )),
-                opt!(float_width)
-            ) | terminated!(
-                recognize!(tuple!(
-                    many0!(complete!(decimal)),
-                    opt!(byte!(b'.')),
-                    many1!(complete!(decimal)),
-                    float_exp
-                )),
-                opt!(float_width)
-            ) | terminated!(
-                recognize!(tuple!(
-                    many1!(complete!(decimal)),
-                    opt!(byte!(b'.')),
-                    many0!(complete!(decimal)),
-                    float_exp
-                )),
-                opt!(float_width)
-            ) | terminated!(recognize!(many1!(complete!(decimal))), float_width)
-        ),
-        |v| str::from_utf8(v).ok().and_then(|i| f64::from_str(i).ok())
-    )
-);
+                    many1(complete(decimal)),
+                ))),
+                opt(float_width),
+            ),
+            terminated(
+                recognize(tuple((
+                    many0(complete(decimal)),
+                    opt(byte!(b'.')),
+                    many1(complete(decimal)),
+                    float_exp,
+                ))),
+                opt(float_width),
+            ),
+            terminated(
+                recognize(tuple((
+                    many1(complete(decimal)),
+                    opt(byte!(b'.')),
+                    many0(complete(decimal)),
+                    float_exp,
+                ))),
+                opt(float_width),
+            ),
+            terminated(recognize(many1(complete(decimal))), float_width),
+        )),
+        |v| str::from_utf8(v).ok().and_then(|i| f64::from_str(i).ok()),
+    )(i)
+}
 
 // ================================
 // ======== main interface ========
 // ================================
 
-named!(one_literal<&[u8],EvalResult,crate::Error>,
-	fix_error!(crate::Error,alt_complete!(
-		map!(full!(c_char),EvalResult::Char) |
-		map!(full!(c_int),|i|EvalResult::Int(::std::num::Wrapping(i))) |
-		map!(full!(c_float),EvalResult::Float) |
-		map!(full!(c_string),EvalResult::Str)
-	))
-);
+fn one_literal(input: &[u8]) -> nom::IResult<&[u8], EvalResult, crate::Error<&[u8]>> {
+    alt((
+        map(full(c_char), EvalResult::Char),
+        map(full(c_int), |i| EvalResult::Int(::std::num::Wrapping(i))),
+        map(full(c_float), EvalResult::Float),
+        map(full(c_string), EvalResult::Str),
+    ))(input)
+    .to_cexpr_result()
+}
 
 /// Parse a C literal.
 ///
 /// The input must contain exactly the representation of a single literal
 /// token, and in particular no whitespace or sign prefixes.
-pub fn parse(input: &[u8]) -> IResult<&[u8], EvalResult, crate::Error> {
+pub fn parse(input: &[u8]) -> IResult<&[u8], EvalResult, crate::Error<&[u8]>> {
     crate::assert_full_parse(one_literal(input))
 }
