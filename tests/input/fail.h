@@ -1,4 +1,3 @@
-#define FAIL_function_like(x) 3
 #define FAIL_empty
 #define FAIL_invalid_for_radix 0b2
 #define FAIL_shift_by_float 3<<1f

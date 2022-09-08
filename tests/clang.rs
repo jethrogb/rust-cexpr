@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::str::{self, FromStr};
 use std::{char, ffi, mem, ptr, slice};
+use std::num::Wrapping;
 
 use cexpr::assert_full_parse;
 use cexpr::expr::{fn_macro_declaration, EvalResult, IdentifierParser};
@@ -25,17 +26,16 @@ fn test_definition(
     tokens: &[Token],
     idents: &mut HashMap<Vec<u8>, EvalResult>,
 ) -> bool {
+    use cexpr::expr::EvalResult::*;
+
     fn bytes_to_int(value: &[u8]) -> Option<EvalResult> {
-        str::from_utf8(value)
-            .ok()
-            .map(|s| s.replace("n", "-"))
-            .map(|s| s.replace("_", ""))
-            .and_then(|v| i64::from_str(&v).ok())
-            .map(::std::num::Wrapping)
+        let s = str::from_utf8(value).ok()?;
+        let s = s.rsplit_once('_').map(|(_, s)| s).unwrap_or(s);
+
+        i64::from_str(&s.replace("n", "-")).ok()
+            .map(Wrapping)
             .map(Int)
     }
-
-    use cexpr::expr::EvalResult::*;
 
     let display_name = String::from_utf8_lossy(&ident).into_owned();
 
@@ -127,6 +127,7 @@ fn test_definition(
                 return false;
             }
         }
+
         assert_full_parse(IdentifierParser::new(&fnidents).expr(&expr_tokens))
     } else {
         IdentifierParser::new(idents)

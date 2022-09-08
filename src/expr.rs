@@ -29,8 +29,8 @@ use std::ops::{
 use crate::literal::{self, CChar};
 use crate::token::{Kind as TokenKind, Token};
 use crate::ToCexprResult;
-use nom::branch::alt;
-use nom::combinator::{complete, map, map_opt};
+use nom::branch::{alt, permutation};
+use nom::combinator::{complete, map, map_opt, opt};
 use nom::multi::{fold_many0, many0, separated_list0};
 use nom::sequence::{delimited, pair, preceded};
 use nom::*;
@@ -54,6 +54,7 @@ pub enum EvalResult {
     Float(f64),
     Char(CChar),
     Str(Vec<u8>),
+    Cast(Vec<Vec<u8>>, Box<Self>),
     Invalid,
 }
 
@@ -121,9 +122,15 @@ fn identifier_token(input: &[Token]) -> CResult<'_, &[u8]> {
         if input[0].kind == TokenKind::Identifier {
             Ok((&input[1..], &input[0].raw[..]))
         } else {
-            Err(crate::nom::Err::Error((input, crate::ErrorKind::TypedToken(TokenKind::Identifier)).into()))
+            Err(crate::nom::Err::Error(
+                (input, crate::ErrorKind::TypedToken(TokenKind::Identifier)).into(),
+            ))
         }
     }
+}
+
+fn keyword(c: &'static str) -> impl Fn(&[Token]) -> CResult<'_, &[u8]> {
+    exact_token!(Keyword, c.as_bytes())
 }
 
 fn p(c: &'static str) -> impl Fn(&[Token]) -> CResult<'_, &[u8]> {
@@ -287,6 +294,10 @@ where
     F: FnMut(I) -> nom::IResult<I, EvalResult, E>,
 {
     nom::combinator::map_opt(f, EvalResult::as_numeric)
+}
+
+fn expr_cast(input: (Vec<Vec<u8>>, EvalResult)) -> EvalResult {
+    EvalResult::Cast(input.0, Box::new(input.1))
 }
 
 impl<'a> PRef<'a> {
@@ -473,12 +484,110 @@ impl<'a> PRef<'a> {
 
     fn expr(self, input: &'_ [Token]) -> CResult<'_, EvalResult> {
         alt((
+            map(pair(|i| self.cast(i), |i| self.expr(i)), expr_cast),
             |i| self.numeric_expr(i),
             delimited(p("("), |i| self.expr(i), p(")")),
             |i| self.concat_str(i),
             |i| self.literal(i),
             |i| self.identifier(i),
         ))(input)
+        .to_cexpr_result()
+    }
+
+    fn cast(self, input: &'_ [Token]) -> CResult<'_, Vec<Vec<u8>>> {
+        delimited(p("("), |i| self.ty(i), p(")"))(input)
+    }
+
+    fn int_ty(input: &'_ [Token]) -> CResult<'_, Vec<&[u8]>> {
+        fn int_signedness(input: &'_ [Token]) -> CResult<'_, &[u8]> {
+            alt((keyword("unsigned"), keyword("signed")))(input)
+        }
+
+        fn int_longness(input: &'_ [Token]) -> CResult<'_, &[u8]> {
+            alt((keyword("short"), keyword("long")))(input)
+        }
+
+        alt((
+            // [const] [(un)signed] long long [int]
+            map(
+                permutation((
+                    opt(keyword("const")),
+                    opt(int_signedness),
+                    keyword("long"),
+                    keyword("long"),
+                    opt(keyword("int")),
+                )),
+                |(_, s, i1, i2, _)| {
+                    if let Some(s) = s {
+                        if s == b"signed" {
+                            vec![i1, i2]
+                        } else {
+                            vec![s, i1, i2]
+                        }
+                    } else {
+                        vec![i1, i2]
+                    }
+                },
+            ),
+            // [const] [(un)signed] long/short [int]
+            map(
+                permutation((
+                    opt(keyword("const")),
+                    opt(int_signedness),
+                    int_longness,
+                    opt(keyword("int")),
+                )),
+                |(_, s, i, _)| {
+                    if let Some(s) = s {
+                        if s == b"signed" {
+                            vec![i]
+                        } else {
+                            vec![s, i]
+                        }
+                    } else {
+                        vec![i]
+                    }
+                },
+            ),
+            // [const] [(un)signed] char/int
+            map(
+                permutation((
+                    opt(keyword("const")),
+                    opt(int_signedness),
+                    alt((keyword("char"), keyword("int"))),
+                )),
+                |(_, s, i)| {
+                    if let Some(s) = s {
+                        if s == b"signed" && i == b"int" {
+                            vec![i]
+                        } else {
+                            vec![s, i]
+                        }
+                    } else {
+                        vec![i]
+                    }
+                },
+            ),
+        ))(input)
+    }
+
+    fn ty(self, input: &'_ [Token]) -> CResult<'_, Vec<Vec<u8>>> {
+        map(
+            alt((
+                // [const] <identifier>
+                map(
+                    permutation((opt(keyword("const")), identifier_token)),
+                    |(_, id)| vec![id],
+                ),
+                // [const] bool
+                map(
+                    permutation((opt(keyword("const")), keyword("bool"))),
+                    |(_, b)| vec![b],
+                ),
+                Self::int_ty,
+            )),
+            |v| v.into_iter().map(|t| t.to_vec()).collect(),
+        )(input)
         .to_cexpr_result()
     }
 
@@ -601,10 +710,6 @@ pub fn macro_definition(input: &[Token]) -> CResult<'_, (&'_ [u8], EvalResult)> 
 pub fn fn_macro_declaration(input: &[Token]) -> CResult<'_, (&[u8], Vec<&[u8]>)> {
     pair(
         identifier_token,
-        delimited(
-            p("("),
-            separated_list0(p(","), identifier_token),
-            p(")"),
-        ),
+        delimited(p("("), separated_list0(p(","), identifier_token), p(")")),
     )(input)
 }

@@ -19,7 +19,7 @@
 
 pub mod nom {
     //! nom's result types, re-exported.
-    pub use nom::{error::ErrorKind, error::Error, Err, IResult, Needed};
+    pub use nom::{error::Error, error::ErrorKind, Err, IResult, Needed};
 }
 pub mod expr;
 pub mod literal;

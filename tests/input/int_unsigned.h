@@ -10,7 +10,7 @@
 #define Int_124 124u
 #define Int_125 125uL
 #define Int_126 126LuL
-#define Int_16 (((1)<<4ULL))/*comment*/ 
+#define Int_16 (((1)<<4ULL))/*comment*/
 #define Int_13 1|8^6&2<<1
 
 #define Int_47 32|15
@@ -27,3 +27,4 @@
 #define Int_n9223372036854775808 9223372036854775808
 
 #define Fn_Int_9(_3) _3*3
+#define Fn_Int_unused_arg_3(x_unused_0) 3
