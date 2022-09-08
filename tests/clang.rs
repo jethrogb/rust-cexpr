@@ -72,6 +72,21 @@ fn test_definition(
                 s.extend_from_slice(rest);
             }
             Some(Str(s))
+        } else if expected == b"Cast" {
+            str::from_utf8(value).ok().and_then(|s| {
+                let (ty, value) = s.rsplit_once("_Int_")?;
+
+                let ty = ty.split("_").filter_map(|t| {
+                    if t == "const" || t == "signed" {
+                        None
+                    } else {
+                      Some(t.as_bytes().to_vec())
+                    }
+                }).collect::<Vec<Vec<u8>>>();
+                let int = bytes_to_int(value.as_bytes())?;
+
+                Some(Cast(ty, Box::new(int)))
+            })
         } else if expected == b"Int" {
             bytes_to_int(value)
         } else if expected == b"Float" {

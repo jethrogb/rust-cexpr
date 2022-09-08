@@ -28,3 +28,15 @@
 
 #define Fn_Int_9(_3) _3*3
 #define Fn_Int_unused_arg_3(x_unused_0) 3
+
+#define Cast_unsigned_short_Int_6 (unsigned short) 6
+#define Cast_const_unsigned_short_Int_6 (const unsigned short) 6
+
+#define Cast_unsigned_int_Int_6 (unsigned int) 6
+#define Cast_const_unsigned_int_Int_6 (const unsigned int) 6
+
+#define Cast_unsigned_long_Int_6 (unsigned long) 6
+#define Cast_const_unsigned_long_Int_6 (const unsigned long) 6
+
+#define Cast_unsigned_long_long_Int_6 (unsigned long long) 6
+#define Cast_const_unsigned_long_long_Int_6 (const unsigned long long) 6
