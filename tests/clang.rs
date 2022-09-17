@@ -6,18 +6,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 extern crate cexpr;
-extern crate clang_sys;
 
 use std::collections::HashMap;
 use std::io::Write;
 use std::str::{self, FromStr};
-use std::{char, ffi, mem, ptr, slice};
+use std::char;
+use std::num::Wrapping;
 
 use cexpr::assert_full_parse;
 use cexpr::expr::{fn_macro_declaration, EvalResult, IdentifierParser};
 use cexpr::literal::CChar;
 use cexpr::token::Token;
-use clang_sys::*;
+use clang::{source::SourceRange, token::TokenKind, EntityKind};
 
 // main testing routine
 fn test_definition(
@@ -25,17 +25,16 @@ fn test_definition(
     tokens: &[Token],
     idents: &mut HashMap<Vec<u8>, EvalResult>,
 ) -> bool {
+    use cexpr::expr::EvalResult::*;
+
     fn bytes_to_int(value: &[u8]) -> Option<EvalResult> {
-        str::from_utf8(value)
-            .ok()
-            .map(|s| s.replace("n", "-"))
-            .map(|s| s.replace("_", ""))
-            .and_then(|v| i64::from_str(&v).ok())
-            .map(::std::num::Wrapping)
+        let s = str::from_utf8(value).ok()?;
+        let s = s.rsplit_once('_').map(|(_, s)| s).unwrap_or(s);
+
+        i64::from_str(&s.replace("n", "-")).ok()
+            .map(Wrapping)
             .map(Int)
     }
-
-    use cexpr::expr::EvalResult::*;
 
     let display_name = String::from_utf8_lossy(&ident).into_owned();
 
@@ -72,6 +71,21 @@ fn test_definition(
                 s.extend_from_slice(rest);
             }
             Some(Str(s))
+        } else if expected == b"Cast" {
+            str::from_utf8(value).ok().and_then(|s| {
+                let (ty, value) = s.rsplit_once("_Int_")?;
+
+                let ty = ty.split("_").filter_map(|t| {
+                    if t == "const" || t == "signed" {
+                        None
+                    } else {
+                      Some(t.as_bytes().to_vec())
+                    }
+                }).collect::<Vec<Vec<u8>>>();
+                let int = bytes_to_int(value.as_bytes())?;
+
+                Some(Cast(ty, Box::new(int)))
+            })
         } else if expected == b"Int" {
             bytes_to_int(value)
         } else if expected == b"Float" {
@@ -127,6 +141,7 @@ fn test_definition(
                 return false;
             }
         }
+
         assert_full_parse(IdentifierParser::new(&fnidents).expr(&expr_tokens))
     } else {
         IdentifierParser::new(idents)
@@ -163,160 +178,77 @@ fn test_definition(
     }
 }
 
-// support code for the clang lexer
-unsafe fn clang_str_to_vec(s: CXString) -> Vec<u8> {
-    let vec = ffi::CStr::from_ptr(clang_getCString(s))
-        .to_bytes()
-        .to_owned();
-    clang_disposeString(s);
-    vec
-}
-
-#[allow(non_upper_case_globals)]
-unsafe fn token_clang_to_cexpr(tu: CXTranslationUnit, orig: &CXToken) -> Token {
+fn token_clang_to_cexpr(token: &clang::token::Token) -> Token {
     Token {
-        kind: match clang_getTokenKind(*orig) {
-            CXToken_Comment => cexpr::token::Kind::Comment,
-            CXToken_Identifier => cexpr::token::Kind::Identifier,
-            CXToken_Keyword => cexpr::token::Kind::Keyword,
-            CXToken_Literal => cexpr::token::Kind::Literal,
-            CXToken_Punctuation => cexpr::token::Kind::Punctuation,
-            _ => panic!("invalid token kind: {:?}", *orig),
+        kind: match token.get_kind() {
+            TokenKind::Comment => cexpr::token::Kind::Comment,
+            TokenKind::Identifier => cexpr::token::Kind::Identifier,
+            TokenKind::Keyword => cexpr::token::Kind::Keyword,
+            TokenKind::Literal => cexpr::token::Kind::Literal,
+            TokenKind::Punctuation => cexpr::token::Kind::Punctuation,
         },
-        raw: clang_str_to_vec(clang_getTokenSpelling(tu, *orig)).into_boxed_slice(),
+        raw: token.get_spelling().into_bytes().into_boxed_slice(),
     }
 }
 
-extern "C" fn visit_children_thunk<F>(
-    cur: CXCursor,
-    parent: CXCursor,
-    closure: CXClientData,
-) -> CXChildVisitResult
-where
-    F: FnMut(CXCursor, CXCursor) -> CXChildVisitResult,
-{
-    unsafe { (&mut *(closure as *mut F))(cur, parent) }
+fn location_in_scope(r: &SourceRange) -> bool {
+    let start = r.get_start();
+    let location = start.get_spelling_location();
+    start.is_in_main_file() && !start.is_in_system_header() && location.file.is_some()
 }
 
-unsafe fn visit_children<F>(cursor: CXCursor, mut f: F)
-where
-    F: FnMut(CXCursor, CXCursor) -> CXChildVisitResult,
-{
-    clang_visitChildren(
-        cursor,
-        visit_children_thunk::<F> as _,
-        &mut f as *mut F as CXClientData,
-    );
-}
-
-unsafe fn location_in_scope(r: CXSourceRange) -> bool {
-    let start = clang_getRangeStart(r);
-    let mut file = ptr::null_mut();
-    clang_getSpellingLocation(
-        start,
-        &mut file,
-        ptr::null_mut(),
-        ptr::null_mut(),
-        ptr::null_mut(),
-    );
-    clang_Location_isFromMainFile(start) != 0
-        && clang_Location_isInSystemHeader(start) == 0
-        && file != ptr::null_mut()
-}
-
-/// tokenize_range_adjust can be used to work around LLVM bug 9069
-/// https://bugs.llvm.org//show_bug.cgi?id=9069
 fn file_visit_macros<F: FnMut(Vec<u8>, Vec<Token>)>(
     file: &str,
-    tokenize_range_adjust: bool,
     mut visitor: F,
 ) {
-    unsafe {
-        let tu = {
-            let index = clang_createIndex(true as _, false as _);
-            let cfile = ffi::CString::new(file).unwrap();
-            let mut tu = mem::MaybeUninit::uninit();
-            assert!(
-                clang_parseTranslationUnit2(
-                    index,
-                    cfile.as_ptr(),
-                    [b"-std=c11\0".as_ptr() as *const ::std::os::raw::c_char].as_ptr(),
-                    1,
-                    ptr::null_mut(),
-                    0,
-                    CXTranslationUnit_DetailedPreprocessingRecord,
-                    &mut *tu.as_mut_ptr()
-                ) == CXError_Success,
-                "Failure reading test case {}",
-                file
-            );
-            tu.assume_init()
-        };
-        visit_children(clang_getTranslationUnitCursor(tu), |cur, _parent| {
-            if cur.kind == CXCursor_MacroDefinition {
-                let mut range = clang_getCursorExtent(cur);
-                if !location_in_scope(range) {
-                    return CXChildVisit_Continue;
-                }
-                range.end_int_data -= if tokenize_range_adjust { 1 } else { 0 };
-                let mut token_ptr = ptr::null_mut();
-                let mut num = 0;
-                clang_tokenize(tu, range, &mut token_ptr, &mut num);
-                if token_ptr != ptr::null_mut() {
-                    let tokens = slice::from_raw_parts(token_ptr, num as usize);
-                    let tokens: Vec<_> = tokens
-                        .iter()
-                        .filter_map(|t| {
-                            if clang_getTokenKind(*t) != CXToken_Comment {
-                                Some(token_clang_to_cexpr(tu, t))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                    clang_disposeTokens(tu, token_ptr, num);
-                    visitor(clang_str_to_vec(clang_getCursorSpelling(cur)), tokens)
-                }
+    let clang = clang::Clang::new().unwrap();
+
+    let index = clang::Index::new(&clang, false, true);
+
+    let tu = index
+        .parser(file)
+        .arguments(&["-std=c11"])
+        .detailed_preprocessing_record(true)
+        .skip_function_bodies(true)
+        .parse()
+        .unwrap();
+
+    let entity = tu.get_entity();
+
+    entity.visit_children(|cur, _parent| {
+        if cur.get_kind() == EntityKind::MacroDefinition {
+            let range = cur.get_range().unwrap();
+            if !location_in_scope(&range) {
+                return clang::EntityVisitResult::Continue;
             }
-            CXChildVisit_Continue
-        });
-        clang_disposeTranslationUnit(tu);
-    };
+
+            let tokens: Vec<_> = range
+                .tokenize()
+                .into_iter()
+                .filter_map(|token| {
+                    if token.get_kind() == TokenKind::Comment {
+                        return None;
+                    }
+
+                    Some(token_clang_to_cexpr(&token))
+                })
+                .collect();
+
+            let display_name = cur.get_display_name().unwrap();
+            visitor(display_name.into_bytes(), tokens)
+        }
+
+        clang::EntityVisitResult::Continue
+    });
 }
 
 fn test_file(file: &str) -> bool {
     let mut idents = HashMap::new();
     let mut all_succeeded = true;
-    file_visit_macros(file, fix_bug_9069(), |ident, tokens| {
+    file_visit_macros(file, |ident, tokens| {
         all_succeeded &= test_definition(ident, &tokens, &mut idents)
     });
     all_succeeded
-}
-
-fn fix_bug_9069() -> bool {
-    fn check_bug_9069() -> bool {
-        let mut token_sets = vec![];
-        file_visit_macros(
-            "tests/input/test_llvm_bug_9069.h",
-            false,
-            |ident, tokens| {
-                assert_eq!(&ident, b"A");
-                token_sets.push(tokens);
-            },
-        );
-        assert_eq!(token_sets.len(), 2);
-        token_sets[0] != token_sets[1]
-    }
-
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Once;
-
-    static CHECK_FIX: Once = Once::new();
-    static FIX: AtomicBool = AtomicBool::new(false);
-
-    CHECK_FIX.call_once(|| FIX.store(check_bug_9069(), Ordering::SeqCst));
-
-    FIX.load(Ordering::SeqCst)
 }
 
 macro_rules! test_file {

@@ -10,7 +10,7 @@
 #define Int_124 124u
 #define Int_125 125uL
 #define Int_126 126LuL
-#define Int_16 (((1)<<4ULL))/*comment*/ 
+#define Int_16 (((1)<<4ULL))/*comment*/
 #define Int_13 1|8^6&2<<1
 
 #define Int_47 32|15
@@ -27,3 +27,16 @@
 #define Int_n9223372036854775808 9223372036854775808
 
 #define Fn_Int_9(_3) _3*3
+#define Fn_Int_unused_arg_3(x_unused_0) 3
+
+#define Cast_unsigned_short_Int_6 (unsigned short) 6
+#define Cast_const_unsigned_short_Int_6 (const unsigned short) 6
+
+#define Cast_unsigned_int_Int_6 (unsigned int) 6
+#define Cast_const_unsigned_int_Int_6 (const unsigned int) 6
+
+#define Cast_unsigned_long_Int_6 (unsigned long) 6
+#define Cast_const_unsigned_long_Int_6 (const unsigned long) 6
+
+#define Cast_unsigned_long_long_Int_6 (unsigned long long) 6
+#define Cast_const_unsigned_long_long_Int_6 (const unsigned long long) 6

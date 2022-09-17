@@ -16,4 +16,8 @@ travis-ci = { repository = "jethrogb/rust-cexpr" }
 nom = { version = "7", default-features = false, features = ["std"] }
 
 [dev-dependencies]
-clang-sys = ">= 0.13.0, < 0.29.0"
+clang = { version = "2", features = ["runtime"] }
+
+[patch.crates-io]
+clang-sys = { git = "https://github.com/reitermarkus/clang-sys", branch = "load-api" }
+clang = { git = "https://github.com/reitermarkus/clang-rs", branch = "load-api" }
