@@ -72,6 +72,20 @@ macro_rules! result_opt (
 );
 
 impl EvalResult {
+    fn non_zero(&self) -> Option<bool> {
+        let non_zero = match *self {
+            EvalResult::Int(w) => w.0 != 0,
+            EvalResult::Float(f) => f != 0.0,
+            EvalResult::Char(c) => match c {
+                CChar::Char(c) => c != '\0',
+                CChar::Raw(r) => r != 0,
+            },
+            EvalResult::Str(_) => true,
+            EvalResult::Invalid => return None,
+        };
+        Some(non_zero)
+    }
+
     result_opt!(fn as_int: Int -> Wrapping<i64>);
     result_opt!(fn as_float: Float -> f64);
     result_opt!(fn as_char: Char -> CChar);
@@ -82,6 +96,20 @@ impl EvalResult {
         match self {
             EvalResult::Int(_) | EvalResult::Float(_) => Some(self),
             _ => None,
+        }
+    }
+
+    fn logical_and(self, val: Self) -> Self {
+        match (self.non_zero(), val.non_zero()) {
+            (Some(a), Some(b)) => Self::Int(Wrapping(i64::from(a && b))),
+            _ => Self::Invalid,
+        }
+    }
+
+    fn logical_or(self, val: Self) -> Self {
+        match (self.non_zero(), val.non_zero()) {
+            (Some(a), Some(b)) => Self::Int(Wrapping(i64::from(a || b))),
+            _ => Self::Invalid,
         }
     }
 }
@@ -276,6 +304,7 @@ fn unary_op(input: (&[u8], EvalResult)) -> Option<EvalResult> {
         (b'~', Int(i)) => Some(Int(!i)),
         (b'~', Float(_)) => None,
         (b'~', _) => unreachable!("non-numeric unary op"),
+        (b'!', i) => i.non_zero().map(|nz| EvalResult::Int(Wrapping((!nz).into()))),
         _ => unreachable!("invalid unary op"),
     }
 }
@@ -296,7 +325,7 @@ impl<'a> PRef<'a> {
             numeric(|i| self.literal(i)),
             numeric(|i| self.identifier(i)),
             map_opt(
-                pair(one_of_punctuation(&["+", "-", "~"][..]), |i| self.unary(i)),
+                pair(one_of_punctuation(&["+", "-", "~", "!"][..]), |i| self.unary(i)),
                 unary_op,
             ),
         ))(input)
@@ -393,9 +422,27 @@ impl<'a> PRef<'a> {
         ))(input)
     }
 
+    fn logical_and(self, input: &'_ [Token]) -> CResult<'_, EvalResult> {
+        let (input, acc) = self.or(input)?;
+        numeric(fold_many0(
+            preceded(complete(p("&&")), |i| self.or(i)),
+            move || acc.clone(),
+            |acc, val: EvalResult| acc.logical_and(val),
+        ))(input)
+    }
+
+    fn logical_or(self, input: &'_ [Token]) -> CResult<'_, EvalResult> {
+        let (input, acc) = self.logical_and(input)?;
+        numeric(fold_many0(
+            preceded(complete(p("||")), |i| self.logical_and(i)),
+            move || acc.clone(),
+            |acc, val: EvalResult| acc.logical_or(val),
+        ))(input)
+    }
+
     #[inline(always)]
     fn numeric_expr(self, input: &'_ [Token]) -> CResult<'_, EvalResult> {
-        self.or(input)
+        self.logical_or(input)
     }
 }
 
@@ -601,10 +648,6 @@ pub fn macro_definition(input: &[Token]) -> CResult<'_, (&'_ [u8], EvalResult)> 
 pub fn fn_macro_declaration(input: &[Token]) -> CResult<'_, (&[u8], Vec<&[u8]>)> {
     pair(
         identifier_token,
-        delimited(
-            p("("),
-            separated_list0(p(","), identifier_token),
-            p(")"),
-        ),
+        delimited(p("("), separated_list0(p(","), identifier_token), p(")")),
     )(input)
 }
